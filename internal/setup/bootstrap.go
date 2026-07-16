@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/olesho/harness/internal/docgen"
 	"github.com/olesho/harness/internal/gitq"
 	"github.com/olesho/harness/internal/lockfile"
 )
@@ -46,6 +47,15 @@ func Bootstrap(root string, out io.Writer) error {
 		} else {
 			fmt.Fprintf(out, "deps [%s]: ok\n", p.Name)
 		}
+	}
+
+	// Render structural docs now (deterministic, no LLM) so they exist right
+	// after setup — the auto-render Stop hook only takes effect in the next agent
+	// session, so we cannot rely on it for the first render.
+	if n, err := docgen.Render(root, lock, false, false, out); err != nil {
+		fmt.Fprintf(out, "docs: FAILED: %v\n", err)
+	} else if n > 0 {
+		fmt.Fprintln(out, "docs: rendered (run the harness-docs skill to add prose summaries)")
 	}
 	return nil
 }
