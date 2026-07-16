@@ -25,6 +25,50 @@ harness bootstrap                      # install deps + git hooks
 harness verify                         # confirm the project matches its lock
 ```
 
+## Adopt an existing Go project
+
+Run this **from the root of your existing project** (where `go.mod` lives). The
+`--adopt` flag tells harness the directory is not empty on purpose: it detects
+your real module path from `go.mod`, does **not** inject any sample code, leaves
+your source and `go.mod` untouched, and only adds harness's own files
+(`harness.lock.json`, `.harness-version`, native lint config if enabled and
+missing, and the wiring for whatever capabilities you turn on).
+
+```sh
+cd /path/to/your/go/project
+
+harness setup --adopt --config - <<'JSON'
+{
+  "layout": "single",
+  "capabilities": { "agents": ["claude"], "gitHooks": true, "skills": true },
+  "projects": [{
+    "name": "myapp",
+    "language": "go",
+    "features": { "lint": true, "test": true, "markdown": true, "diagrams": true }
+  }]
+}
+JSON
+
+harness bootstrap     # install git-hook delegates (and any deps)
+harness verify        # confirm the lock matches your project
+harness lint          # gofmt + go vet + golangci-lint over your code
+harness docs render   # write docs/MODULES.md + modules.{svg,html} from your AST
+```
+
+Notes:
+- `name` is just a label in single-project layout; `modulePath` is auto-detected
+  from `go.mod`, so you don't pass it.
+- Turn features off you don't want — e.g. drop `"diagrams"` for markdown-only, or
+  set `"lint": false`. A minimal adopt (`"features": {"lint": true}`,
+  `capabilities: {}`) adds almost nothing but the lock, the pin, and a
+  `.golangci.yml`.
+- To let the agent write the diagram prose: `harness docs status --json` lists
+  what's pending, then the agent submits it via `harness docs enrich` (the
+  `harness-docs` skill, installed when `skills` is on, drives this). harness
+  itself never calls an LLM.
+- Prefer to hand-edit the config? `harness setup --print-config-template` prints
+  a starting point.
+
 ## Concepts
 
 - **One published CLI, clean projects.** The binary embeds templates, wiring, extractors, and the toolchain

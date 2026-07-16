@@ -42,13 +42,21 @@ func Init(root string, in *Input, opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	// Adopting an existing project: take the real module path from the on-disk
+	// go.mod (so verify passes) and do not scaffold the sample module.
+	if opts.Adopt {
+		if err := adoptExisting(root, lock); err != nil {
+			return nil, err
+		}
+	}
+
 	if !opts.NoGit && !gitq.IsRepo(root) {
 		if err := gitInit(root); err != nil {
 			return nil, fmt.Errorf("git init: %w", err)
 		}
 	}
 
-	files, err := Render(filepath.Base(mustAbs(root)), lock)
+	files, err := Render(filepath.Base(mustAbs(root)), lock, !opts.Adopt)
 	if err != nil {
 		return nil, err
 	}

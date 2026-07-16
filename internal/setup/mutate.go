@@ -69,7 +69,8 @@ func Add(root string, in *Input) (*Result, error) {
 	if err := lock.Validate(); err != nil {
 		return nil, err
 	}
-	files, err := Render(filepath.Base(mustAbs(root)), lock)
+	// New subprojects get the full scaffold (sample included).
+	files, err := Render(filepath.Base(mustAbs(root)), lock, true)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,8 @@ func Edit(root, name, confirm string, feats FeaturesInput) (*Result, error) {
 	if err := lock.Validate(); err != nil {
 		return nil, err
 	}
-	files, err := Render(filepath.Base(mustAbs(root)), lock)
+	// Reconcile config + wiring only — never re-scaffold sample source on edit.
+	files, err := Render(filepath.Base(mustAbs(root)), lock, false)
 	if err != nil {
 		return nil, err
 	}

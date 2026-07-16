@@ -45,13 +45,14 @@ func renderAsset(assetPath string, data tmplData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Render produces every file to write for a lock (project sources + native
-// config as owned; harness wiring as managed), conditioned on capabilities and
-// features. repoName labels agent docs.
-func Render(repoName string, lock *lockfile.Lock) ([]renderFile, error) {
+// Render produces every file to write for a lock. includeSamples controls
+// whether the language sample module (greeter.*) is scaffolded — true for a new
+// project (setup/add), false when adopting an existing project or reconciling on
+// edit (never inject sample source into real code). repoName labels agent docs.
+func Render(repoName string, lock *lockfile.Lock, includeSamples bool) ([]renderFile, error) {
 	var out []renderFile
 	for _, p := range lock.Projects {
-		pf, err := projectFiles(lock, p)
+		pf, err := projectFiles(lock, p, includeSamples)
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +66,61 @@ func Render(repoName string, lock *lockfile.Lock) ([]renderFile, error) {
 	return out, nil
 }
 
-func projectFiles(lock *lockfile.Lock, p lockfile.Project) ([]renderFile, error) {
+type fileSpec struct {
+	asset string
+	dest  string
+}
+
+// projectConfigSpecs are the native config / manifest files (seeded once, then
+// owned by the user; harmlessly skipped when they already exist).
+func projectConfigSpecs(lang string) []fileSpec {
+	switch lang {
+	case lockfile.LangGo:
+		return []fileSpec{
+			{"templates/go/go.mod.tmpl", "go.mod"},
+			{"templates/go/golangci.yml", ".golangci.yml"},
+		}
+	case lockfile.LangPython:
+		return []fileSpec{{"templates/python/pyproject.toml.tmpl", "pyproject.toml"}}
+	case lockfile.LangTS:
+		return []fileSpec{
+			{"templates/typescript/package.json.tmpl", "package.json"},
+			{"templates/typescript/tsconfig.json", "tsconfig.json"},
+			{"templates/typescript/eslint.config.js", "eslint.config.js"},
+			{"templates/typescript/prettierrc.json", ".prettierrc.json"},
+			{"templates/typescript/vitest.config.ts", "vitest.config.ts"},
+		}
+	default:
+		return nil
+	}
+}
+
+// projectSampleSpecs are the sample module source files (a real project keeps
+// its own code; these are only for a freshly scaffolded project).
+func projectSampleSpecs(lang string) []fileSpec {
+	switch lang {
+	case lockfile.LangGo:
+		return []fileSpec{
+			{"templates/go/greeter.go.tmpl", "example/greeter.go"},
+			{"templates/go/greeter_test.go.tmpl", "example/greeter_test.go"},
+		}
+	case lockfile.LangPython:
+		return []fileSpec{
+			{"templates/python/example/__init__.py", "example/__init__.py"},
+			{"templates/python/example/greeter.py", "example/greeter.py"},
+			{"templates/python/tests/test_greeter.py", "tests/test_greeter.py"},
+		}
+	case lockfile.LangTS:
+		return []fileSpec{
+			{"templates/typescript/src/greeter.ts", "src/greeter.ts"},
+			{"templates/typescript/test/greeter.test.ts", "test/greeter.test.ts"},
+		}
+	default:
+		return nil
+	}
+}
+
+func projectFiles(lock *lockfile.Lock, p lockfile.Project, includeSamples bool) ([]renderFile, error) {
 	base := p.Path(lock.Layout)
 	join := func(rel string) string {
 		if base == "." {
@@ -75,37 +130,11 @@ func projectFiles(lock *lockfile.Lock, p lockfile.Project) ([]renderFile, error)
 	}
 	data := tmplData{Name: p.Name, ModulePath: p.ModulePath}
 
-	type spec struct {
-		asset string
-		dest  string
+	specs := projectConfigSpecs(p.Language)
+	if includeSamples {
+		specs = append(specs, projectSampleSpecs(p.Language)...)
 	}
-	var specs []spec
-	switch p.Language {
-	case lockfile.LangGo:
-		specs = []spec{
-			{"templates/go/go.mod.tmpl", "go.mod"},
-			{"templates/go/golangci.yml", ".golangci.yml"},
-			{"templates/go/greeter.go.tmpl", "example/greeter.go"},
-			{"templates/go/greeter_test.go.tmpl", "example/greeter_test.go"},
-		}
-	case lockfile.LangPython:
-		specs = []spec{
-			{"templates/python/pyproject.toml.tmpl", "pyproject.toml"},
-			{"templates/python/example/__init__.py", "example/__init__.py"},
-			{"templates/python/example/greeter.py", "example/greeter.py"},
-			{"templates/python/tests/test_greeter.py", "tests/test_greeter.py"},
-		}
-	case lockfile.LangTS:
-		specs = []spec{
-			{"templates/typescript/package.json.tmpl", "package.json"},
-			{"templates/typescript/tsconfig.json", "tsconfig.json"},
-			{"templates/typescript/eslint.config.js", "eslint.config.js"},
-			{"templates/typescript/prettierrc.json", ".prettierrc.json"},
-			{"templates/typescript/vitest.config.ts", "vitest.config.ts"},
-			{"templates/typescript/src/greeter.ts", "src/greeter.ts"},
-			{"templates/typescript/test/greeter.test.ts", "test/greeter.test.ts"},
-		}
-	default:
+	if len(specs) == 0 {
 		return nil, fmt.Errorf("unsupported language %q", p.Language)
 	}
 

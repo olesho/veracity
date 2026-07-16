@@ -102,3 +102,43 @@ func TestSingleGoFullFlow(t *testing.T) {
 		}
 	}
 }
+
+// TestAdoptExistingGoProject adopts a pre-existing Go project: harness must
+// detect the real module path, NOT inject the sample module, and pass verify.
+func TestAdoptExistingGoProject(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	mustWriteFile(t, root, "go.mod", "module github.com/acme/widget\n\ngo 1.24\n")
+	mustWriteFile(t, root, "widget.go", "// Package widget is existing code.\npackage widget\n\n// Store is the boundary.\ntype Store interface{ Get(id string) string }\n")
+
+	cfg := `{"layout":"single","preset":"standard","capabilities":{"agents":["claude"]},` +
+		`"projects":[{"name":"widget","language":"go","features":{"lint":false,"test":false,"markdown":true,"diagrams":true}}]}`
+	if code, _, e := run(t, cfg, "setup", "--config", "-", "--adopt"); code != 0 {
+		t.Fatalf("adopt setup failed (%d): %s", code, e)
+	}
+	// The existing code is untouched and no sample module was injected.
+	if _, err := os.Stat(filepath.Join(root, "example", "greeter.go")); err == nil {
+		t.Fatal("adopt must not inject the sample module")
+	}
+	mustExist(t, root, "harness.lock.json", "widget.go", ".claude/settings.json")
+
+	// verify must pass — the lock's modulePath was detected from go.mod.
+	if code, o, e := run(t, "", "verify"); code != 0 {
+		t.Fatalf("verify failed after adopt (%d): %s%s", code, o, e)
+	}
+	// docs sees the real Store interface.
+	if code, out, _ := run(t, "", "docs", "status", "--json"); code != 0 || !strings.Contains(out, `"name": "Store"`) {
+		t.Fatalf("expected the existing Store interface in status: %s", out)
+	}
+}
+
+func mustWriteFile(t *testing.T, root, rel, content string) {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
