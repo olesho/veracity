@@ -69,6 +69,33 @@ Notes:
 - Prefer to hand-edit the config? `harness setup --print-config-template` prints
   a starting point.
 
+## Reruns and changing your mind
+
+`harness setup` is a one-time step: running it again on an initialized repo is
+**refused** (it points you at the commands below). Everything is adjustable
+afterward without re-running setup:
+
+```sh
+# per-project features (name first, then flags; --confirm guards the change)
+harness edit myapp --confirm myapp --diagrams on      # enabling diagrams also enables markdown
+harness edit myapp --confirm myapp --lint off --test off
+
+# repo-level capabilities (no name; add/remove wiring, CI, skills, agents)
+harness reconfigure --ci on --agent-docs on           # creates ci.yml, CLAUDE.md, ...
+harness reconfigure --ci off                          # prunes the files it added
+harness reconfigure --codex on                        # add Codex hook wiring alongside Claude
+```
+
+- **Enabling** a capability creates its managed files; **disabling** one prunes
+  exactly the files harness manages for it. Your source, `go.mod`, native lint
+  config, and generated docs are never pruned.
+- If you toggle `git-hooks`, run `harness bootstrap` afterward to (re)install the
+  `.git/hooks` delegates.
+- If you hand-edited a harness-managed wiring file, a reconcile won't clobber it:
+  it writes a `<file>.harness-new` beside it and tells you.
+- `language` and `modulePath` are immutable; changing them means removing and
+  re-adding the project.
+
 ## Concepts
 
 - **One published CLI, clean projects.** The binary embeds templates, wiring, extractors, and the toolchain

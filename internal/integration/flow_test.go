@@ -132,6 +132,59 @@ func TestAdoptExistingGoProject(t *testing.T) {
 	}
 }
 
+// TestToggleFeaturesAndCapabilities covers subsequent reruns: setup refuses a
+// second time, `edit` toggles per-project features (with flags after the name),
+// and `reconfigure` toggles repo capabilities (adding files, then pruning them).
+func TestToggleFeaturesAndCapabilities(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	cfg := `{"layout":"single","preset":"standard","capabilities":{"agents":["claude"]},` +
+		`"projects":[{"name":"app","language":"go","modulePath":"example.com/app",` +
+		`"features":{"lint":true,"test":true,"markdown":false,"diagrams":false}}]}`
+	if code, _, e := run(t, cfg, "setup", "--config", "-"); code != 0 {
+		t.Fatalf("setup failed: %s", e)
+	}
+
+	// A second setup is refused.
+	if code, _, _ := run(t, cfg, "setup", "--config", "-"); code == 0 {
+		t.Fatal("expected second setup to be refused")
+	}
+
+	// edit: flags placed AFTER the name must parse; wrong --confirm is rejected.
+	if code, _, _ := run(t, "", "edit", "app", "--confirm", "WRONG", "--lint", "off"); code == 0 {
+		t.Fatal("edit with wrong --confirm should fail")
+	}
+	if code, _, e := run(t, "", "edit", "app", "--confirm", "app", "--diagrams", "on"); code != 0 {
+		t.Fatalf("edit --diagrams on failed: %s", e)
+	}
+	// diagrams forces markdown.
+	code, out, _ := run(t, "", "lock-query", "app", "--json")
+	if code != 0 || !strings.Contains(out, `"markdown": true`) || !strings.Contains(out, `"diagrams": true`) {
+		t.Fatalf("diagrams should force markdown on: %s", out)
+	}
+
+	// reconfigure: enable CI adds files; disable CI prunes them.
+	if code, _, e := run(t, "", "reconfigure", "--ci", "on"); code != 0 {
+		t.Fatalf("reconfigure --ci on failed: %s", e)
+	}
+	mustExist(t, root, ".github/workflows/ci.yml", "docs/ci-setup.md")
+	if code, _, e := run(t, "", "reconfigure", "--ci", "off"); code != 0 {
+		t.Fatalf("reconfigure --ci off failed: %s", e)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github/workflows/ci.yml")); err == nil {
+		t.Fatal("disabling ci should prune ci.yml")
+	}
+
+	// Adding codex wiring works and verify stays clean.
+	if code, _, e := run(t, "", "reconfigure", "--codex", "on"); code != 0 {
+		t.Fatalf("reconfigure --codex on failed: %s", e)
+	}
+	mustExist(t, root, ".codex/config.toml")
+	if code, o, e := run(t, "", "verify"); code != 0 {
+		t.Fatalf("verify failed after toggles: %s%s", o, e)
+	}
+}
+
 func mustWriteFile(t *testing.T, root, rel, content string) {
 	t.Helper()
 	full := filepath.Join(root, filepath.FromSlash(rel))

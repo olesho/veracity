@@ -124,6 +124,45 @@ func Edit(root, name, confirm string, feats FeaturesInput) (*Result, error) {
 	return execute(root, lock, files)
 }
 
+// Reconfigure changes repo-level capabilities after setup and reconciles the
+// wiring: newly enabled capabilities have their files created; newly disabled
+// ones have their managed files pruned. Project source and native config are
+// untouched.
+func Reconfigure(root string, changes CapsInput) (*Result, error) {
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	c := &lock.Capabilities
+	if changes.Agents != nil {
+		c.Agents = append([]string{}, (*changes.Agents)...)
+	}
+	if changes.GitHooks != nil {
+		c.GitHooks = *changes.GitHooks
+	}
+	if changes.CI != nil {
+		c.CI = *changes.CI
+	}
+	if changes.AgentDocs != nil {
+		c.AgentDocs = *changes.AgentDocs
+	}
+	if changes.Skills != nil {
+		c.Skills = *changes.Skills
+	}
+	if c.Agents == nil {
+		c.Agents = []string{}
+	}
+	if err := lock.Validate(); err != nil {
+		return nil, err
+	}
+	// Reconcile config + wiring only (no sample source).
+	files, err := Render(filepath.Base(mustAbs(root)), lock, false)
+	if err != nil {
+		return nil, err
+	}
+	return execute(root, lock, files)
+}
+
 // Remove unregisters a project. It refuses while the project directory still
 // exists unless archive is set, in which case the directory is atomically moved
 // to archived/<name> so the repo is verify-clean immediately.

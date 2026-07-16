@@ -79,13 +79,15 @@ func cmdList(args []string, out, errw io.Writer) int {
 }
 
 func cmdLockQuery(args []string, out, errw io.Writer) int {
-	fs := flag.NewFlagSet("lock-query", flag.ContinueOnError)
-	fs.SetOutput(errw)
-	if err := fs.Parse(args); err != nil {
+	if len(args) < 1 || isFlag(args[0]) {
+		fmt.Fprintln(errw, "usage: harness lock-query <name> [--json]")
 		return 2
 	}
-	if fs.NArg() < 1 {
-		fmt.Fprintln(errw, "usage: harness lock-query <name> [--json]")
+	name := args[0]
+	fs := flag.NewFlagSet("lock-query", flag.ContinueOnError)
+	fs.SetOutput(errw)
+	_ = fs.Bool("json", true, "output JSON (always on; accepted for consistency)")
+	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
 	lock, err := lockfile.Load(resolveRoot())
@@ -93,7 +95,7 @@ func cmdLockQuery(args []string, out, errw io.Writer) int {
 		fmt.Fprintf(errw, "harness lock-query: %v\n", err)
 		return 1
 	}
-	p, ok := lock.Find(fs.Arg(0))
+	p, ok := lock.Find(name)
 	if !ok {
 		fmt.Fprintf(errw, "harness lock-query: no such project %q\n", fs.Arg(0))
 		return 1

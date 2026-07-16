@@ -42,6 +42,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdAdd(rest, stdin, stdout, stderr)
 	case "edit":
 		return cmdEdit(rest, stdout, stderr)
+	case "reconfigure":
+		return cmdReconfigure(rest, stdout, stderr)
 	case "remove":
 		return cmdRemove(rest, stdout, stderr)
 	case "verify":
@@ -219,6 +221,13 @@ func cmdAdd(args []string, stdin io.Reader, out, errw io.Writer) int {
 }
 
 func cmdEdit(args []string, out, errw io.Writer) int {
+	// The project name is the first argument so that flags may follow it (Go's
+	// flag package stops at the first positional, so we peel the name off first).
+	if len(args) < 1 || isFlag(args[0]) {
+		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off]")
+		return 2
+	}
+	name := args[0]
 	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fs.SetOutput(errw)
 	confirm := fs.String("confirm", "", "must equal the project name")
@@ -226,14 +235,9 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	test := fs.String("test", "", "on|off")
 	markdown := fs.String("markdown", "", "on|off")
 	diagrams := fs.String("diagrams", "", "on|off")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	if fs.NArg() < 1 {
-		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off ...]")
-		return 2
-	}
-	name := fs.Arg(0)
 	feats := setup.FeaturesInput{
 		Lint: onOff(*lint), Test: onOff(*test), Markdown: onOff(*markdown), Diagrams: onOff(*diagrams),
 	}
@@ -248,18 +252,18 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 }
 
 func cmdRemove(args []string, out, errw io.Writer) int {
+	if len(args) < 1 || isFlag(args[0]) {
+		fmt.Fprintln(errw, "usage: harness remove <name> --confirm <name> [--archive]")
+		return 2
+	}
+	name := args[0]
 	fs := flag.NewFlagSet("remove", flag.ContinueOnError)
 	fs.SetOutput(errw)
 	confirm := fs.String("confirm", "", "must equal the project name")
 	archive := fs.Bool("archive", false, "move the project dir to archived/<name> instead of refusing")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	if fs.NArg() < 1 {
-		fmt.Fprintln(errw, "usage: harness remove <name> --confirm <name> [--archive]")
-		return 2
-	}
-	name := fs.Arg(0)
 	if err := setup.Remove(resolveRoot(), name, *confirm, *archive); err != nil {
 		fmt.Fprintf(errw, "harness remove: %v\n", err)
 		return 1
@@ -337,6 +341,66 @@ func cmdHook(args []string, stdin io.Reader, out, errw io.Writer) int {
 	return hook.Run(event, *agent, resolveRoot(), stdin, out, errw)
 }
 
+// cmdReconfigure toggles repo-level capabilities (agents, git hooks, CI, agent
+// docs, skills) after setup and reconciles the wiring — adding newly enabled
+// files and pruning newly disabled ones.
+func cmdReconfigure(args []string, out, errw io.Writer) int {
+	fs := flag.NewFlagSet("reconfigure", flag.ContinueOnError)
+	fs.SetOutput(errw)
+	claude := fs.String("claude", "", "on|off — wire Claude Code hooks/skills")
+	codex := fs.String("codex", "", "on|off — wire Codex hooks")
+	gitHooks := fs.String("git-hooks", "", "on|off — native .git/hooks delegates")
+	ci := fs.String("ci", "", "on|off — .github/workflows/ci.yml + docs/ci-setup.md")
+	agentDocs := fs.String("agent-docs", "", "on|off — CLAUDE.md / AGENTS.md")
+	skills := fs.String("skills", "", "on|off — project-local agent skills")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	root := resolveRoot()
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		fmt.Fprintf(errw, "harness reconfigure: %v\n", err)
+		return 1
+	}
+
+	var agentsPtr *[]string
+	if *claude != "" || *codex != "" {
+		set := map[string]bool{}
+		for _, a := range lock.Capabilities.Agents {
+			set[a] = true
+		}
+		if v := onOff(*claude); v != nil {
+			set[lockfile.AgentClaude] = *v
+		}
+		if v := onOff(*codex); v != nil {
+			set[lockfile.AgentCodex] = *v
+		}
+		agents := []string{}
+		for _, a := range []string{lockfile.AgentClaude, lockfile.AgentCodex} {
+			if set[a] {
+				agents = append(agents, a)
+			}
+		}
+		agentsPtr = &agents
+	}
+
+	changes := setup.CapsInput{
+		Agents: agentsPtr, GitHooks: onOff(*gitHooks), CI: onOff(*ci),
+		AgentDocs: onOff(*agentDocs), Skills: onOff(*skills),
+	}
+	res, err := setup.Reconfigure(root, changes)
+	if err != nil {
+		fmt.Fprintf(errw, "harness reconfigure: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(out, "reconfigured: %d added, %d updated, %d pruned. Run `harness bootstrap` if you changed git hooks.\n", res.Created, res.Replaced, res.Pruned)
+	reportConflicts(res, errw)
+	return 0
+}
+
+// isFlag reports whether an argument looks like a flag (leading '-').
+func isFlag(s string) bool { return len(s) > 0 && s[0] == '-' }
+
 func cmdRepair(out, errw io.Writer) int {
 	if err := txn.Repair(resolveRoot()); err != nil {
 		fmt.Fprintf(errw, "harness repair: %v\n", err)
@@ -395,6 +459,7 @@ setup & lifecycle:
   bootstrap    install dependencies and git-hook delegates
   add          append projects to a monorepo (--config -)
   edit         toggle a project's features (edit <name> --confirm <name> --lint on|off ...)
+  reconfigure  toggle repo capabilities (reconfigure --ci on --skills off --codex on ...)
   remove       unregister a project (remove <name> --confirm <name> [--archive])
   verify       check the working tree matches harness.lock.json
   repair       heal an interrupted transaction

@@ -16,8 +16,8 @@ type Result struct {
 	// Conflicts lists managed files that were locally modified and therefore not
 	// overwritten; a "<file>.harness-new" side file was written for each.
 	Conflicts []string
-	// Created/Replaced/Skipped counts for reporting.
-	Created, Replaced, Skipped int
+	// Created/Replaced/Skipped/Pruned counts for reporting.
+	Created, Replaced, Skipped, Pruned int
 }
 
 func fileMode(rel string) os.FileMode {
@@ -43,6 +43,21 @@ func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, err
 		return nil, err
 	}
 	res := &Result{}
+
+	// Snapshot the currently-managed files and the set now being rendered, so we
+	// can prune managed files that a now-disabled capability no longer emits.
+	oldManaged := map[string]bool{}
+	for _, rel := range manifest.SortedPaths() {
+		if e, _ := manifest.Get(rel); e.Kind == ownership.Managed {
+			oldManaged[rel] = true
+		}
+	}
+	renderedManaged := map[string]bool{}
+	for _, f := range files {
+		if f.Kind == ownership.Managed {
+			renderedManaged[f.Rel] = true
+		}
+	}
 
 	tx, err := txn.Begin(root)
 	if err != nil {
@@ -85,13 +100,30 @@ func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, err
 		}
 	}
 
-	// Manifest (managed files only) — write only when non-empty.
-	if !manifest.Empty() {
+	// Prune managed files that are no longer rendered (e.g. a disabled
+	// capability). Owned files (source, native config, generated docs) are never
+	// pruned — only harness-managed wiring.
+	for rel := range oldManaged {
+		if !renderedManaged[rel] {
+			tx.Delete(rel)
+			manifest.Remove(rel)
+			res.Pruned++
+		}
+	}
+
+	// Manifest (managed files only) — write when non-empty; otherwise remove a
+	// now-empty manifest so no stale file lingers.
+	manifestPath := ownership.RelPath
+	if manifest.Empty() {
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(manifestPath))); statErr == nil {
+			tx.Delete(manifestPath)
+		}
+	} else {
 		mb, err := manifest.Marshal()
 		if err != nil {
 			return nil, err
 		}
-		if err := tx.Write(ownership.RelPath, mb, 0o644, false); err != nil {
+		if err := tx.Write(manifestPath, mb, 0o644, false); err != nil {
 			return nil, err
 		}
 	}
