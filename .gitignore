@@ -1,0 +1,19 @@
+# Harness build artifacts
+/harness
+/dist/
+
+# Harness runtime state (transient; ignored at any depth, incl. example projects)
+**/.harness/txn/
+**/.harness/session-*
+**/.harness/lock
+**/docs/.docgen-cache/
+
+# Go
+*.test
+*.out
+
+# Node (TS extractor source)
+extractors-src/ts/node_modules/
+
+# OS
+.DS_Store

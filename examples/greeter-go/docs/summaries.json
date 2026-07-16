@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    "example.com/greeter/example": {
+      "summaryHash": "65d1dcc0eac20d4d277a7eee7c40aab1f41bbde7a194e0da87dcfaa33234a698",
+      "summary": "The greeter module: a Greeter boundary and an English implementation, kept minimal so lint, tests, and the docs pipeline all have real input.",
+      "interfaces": {
+        "Greeter": {
+          "descHash": "653217b0b014bea7c3e1f4080dec892743a173c10b83e60b5b959c1c0a82b90d",
+          "description": "The contract for producing a greeting from a name; callers depend on this rather than the concrete EnglishGreeter."
+        }
+      }
+    }
+  }
+}

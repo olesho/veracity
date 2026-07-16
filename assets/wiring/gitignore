@@ -1,0 +1,14 @@
+# harness runtime state
+.harness/txn/
+.harness/session-*
+.harness/lock
+**/docs/.docgen-cache/
+
+# dependencies / build output
+node_modules/
+.venv/
+dist/
+build/
+
+# OS
+.DS_Store

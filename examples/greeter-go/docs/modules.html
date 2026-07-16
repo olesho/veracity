@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>greeter — Modules</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 2rem; line-height: 1.5;
+         background: #ffffff; color: #0f172a; }
+  @media (prefers-color-scheme: dark) { body { background: #0b1120; color: #e2e8f0; } .card { background: #111827 !important; } code { background: #1f2937 !important; } }
+  h1 { font-size: 1.6rem; }
+  .diagram { overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem; margin: 1rem 0 2rem; }
+  .card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; background: #f8fafc; }
+  .path { font-family: ui-monospace, monospace; font-size: .85rem; color: #64748b; }
+  .pending { color: #92400e; font-style: italic; }
+  .iface { border: 1px dashed #d97706; border-radius: 6px; padding: .75rem 1rem; margin: .75rem 0; }
+  .iface h3 { margin: 0 0 .35rem; font-size: 1rem; }
+  code { font-family: ui-monospace, monospace; background: #eef2f7; padding: .1rem .3rem; border-radius: 4px; font-size: .85rem; }
+  ul { margin: .35rem 0; padding-left: 1.2rem; }
+</style>
+</head>
+<body>
+<h1>greeter — Modules &amp; Boundaries</h1>
+<div class="diagram"><svg xmlns="http://www.w3.org/2000/svg" width="368" height="268" viewBox="0 0 368 268" font-family="ui-sans-serif, system-ui, sans-serif"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker></defs><rect width="100%" height="100%" fill="#ffffff"/><g transform="translate(24,24)"><rect width="320" height="210" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="2"/><text x="12" y="28" font-size="15" font-weight="700" fill="#0f172a">example</text><text x="12" y="44" font-size="11" font-family="ui-monospace, monospace" fill="#64748b">example</text><text x="12" y="62" font-size="12" fill="#334155">The greeter module: a Greeter boundary and an</text><text x="12" y="78" font-size="12" fill="#334155">English implementation, kept minimal so lint,</text><text x="12" y="94" font-size="12" fill="#334155">tests, and the docs pipeline all have real</text><rect x="12" y="122" width="296" height="80" rx="5" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5 3"/><text x="20" y="142" font-size="12" font-weight="700" fill="#92400e">interface Greeter</text><text x="20" y="158" font-size="11" font-family="ui-monospace, monospace" fill="#78350f">Greet(name string) string</text><text x="20" y="174" font-size="11" fill="#92400e">The contract for producing a greeting from a</text><text x="20" y="190" font-size="11" fill="#92400e">name; callers depend on this rather than the</text></g></svg></div>
+
+<section class="card">
+  <h2>example <span class="path">example</span></h2>
+  <p>The greeter module: a Greeter boundary and an English implementation, kept minimal so lint, tests, and the docs pipeline all have real input.</p>
+  <p><em>Package example is a minimal sample module: one interface and one
+implementation behind it, so lint, tests, and the docs/diagram pipeline all
+have real input immediately after setup.</em></p>
+  <h3>Exports</h3><ul><li><code>type EnglishGreeter</code> — EnglishGreeter greets in English.</li></ul>
+  
+  <div class="iface">
+    <h3>interface Greeter</h3>
+    <p>The contract for producing a greeting from a name; callers depend on this rather than the concrete EnglishGreeter.</p>
+    <p><em>Greeter produces a greeting for a name. It is the module&#39;s boundary — the
+contract other code depends on rather than the concrete type.</em></p>
+    <ul><li><code>Greet(name string) string</code></li></ul>
+  </div>
+  
+</section>
+
+</body>
+</html>

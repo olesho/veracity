@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "layout": "single",
+  "capabilities": {
+    "agents": [
+      "claude"
+    ],
+    "gitHooks": true,
+    "ci": false,
+    "agentDocs": false,
+    "skills": true
+  },
+  "projects": [
+    {
+      "name": "greeter",
+      "language": "go",
+      "modulePath": "example.com/greeter",
+      "features": {
+        "lint": true,
+        "test": true,
+        "markdown": true,
+        "diagrams": true
+      }
+    }
+  ]
+}
