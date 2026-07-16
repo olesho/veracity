@@ -66,6 +66,40 @@ func TestStatusEnrichRoundTrip(t *testing.T) {
 	}
 }
 
+func TestEnrichAcceptsArrayForm(t *testing.T) {
+	root, lock, proj := goProject(t)
+	// The array shape an agent might guess first must be accepted.
+	arr := `{"modules":[{"id":"example.com/demo/greeter","summary":"Greets.","interfaces":{"Greeter":"Contract."}}]}`
+	res, err := Enrich(root, lock, proj, []byte(arr))
+	if err != nil {
+		t.Fatalf("array form should be accepted: %v", err)
+	}
+	if res.Modules != 1 || res.Interfaces != 1 {
+		t.Fatalf("array form stored wrong counts: %+v", res)
+	}
+	rep, _ := Status(root, lock, proj)
+	if rep.Modules[0].Summary != "Greets." {
+		t.Fatalf("array-form summary not stored: %q", rep.Modules[0].Summary)
+	}
+}
+
+func TestEnrichTemplateListsPending(t *testing.T) {
+	root, lock, proj := goProject(t)
+	rep, _ := Status(root, lock, proj)
+	tmpl, err := rep.EnrichTemplate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The template must be valid enrich input the parser accepts round-trip.
+	var in EnrichInput
+	if err := in.UnmarshalJSON(tmpl); err != nil {
+		t.Fatalf("template is not valid enrich input: %v\n%s", err, tmpl)
+	}
+	if _, ok := in.Modules["example.com/demo/greeter"]; !ok {
+		t.Fatalf("template missing the pending module: %s", tmpl)
+	}
+}
+
 func TestEnrichRejectsUnknownIDs(t *testing.T) {
 	root, lock, proj := goProject(t)
 	if _, err := Enrich(root, lock, proj, []byte(`{"modules":{"nope/bogus":{"summary":"x"}}}`)); err == nil {

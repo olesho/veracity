@@ -23,14 +23,17 @@ only needed when code changes.
    module's interfaces (name, methods, doc comments). Items with
    `"needsSummary": true` / `"needsDescription": true` need prose from you.
 
-2. **Write grounded prose.** For each pending module, write a 1–3 sentence
-   `summary` of what it is responsible for — grounded ONLY in its name, path,
-   doc comments, exported signatures, and interfaces. For each pending
-   interface, write a 1–2 sentence `description` of the contract it represents
-   for callers. Do not invent behavior, and do not rename anything.
+2. **Write grounded prose.** `harness docs status --template` prints a
+   ready-to-fill payload containing exactly the pending items with the right
+   keys. For each pending module, write a 1–3 sentence `summary` of what it is
+   responsible for — grounded ONLY in its name, path, doc comments, exported
+   signatures, and interfaces. For each pending interface, write a 1–2 sentence
+   description of the contract it represents for callers. Do not invent behavior
+   or rename anything.
 
 3. **Submit the prose** (validated against the current IR; unknown ids are
-   rejected):
+   rejected). `modules` is an object keyed by module id (an array of
+   `{"id":...}` objects is also accepted):
 
    ```sh
    printf '%s' '{

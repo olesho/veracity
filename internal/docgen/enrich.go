@@ -21,6 +21,43 @@ type EnrichModule struct {
 	Interfaces map[string]string `json:"interfaces,omitempty"`
 }
 
+// UnmarshalJSON accepts both shapes of the "modules" field so the payload is
+// hard to get wrong: the canonical map keyed by module id, and an array of
+// objects that each carry their own "id".
+//
+//	{"modules": {"<id>": {"summary": "...", "interfaces": {"<name>": "..."}}}}
+//	{"modules": [{"id": "<id>", "summary": "...", "interfaces": {"<name>": "..."}}]}
+func (e *EnrichInput) UnmarshalJSON(data []byte) error {
+	var mapForm struct {
+		Modules map[string]EnrichModule `json:"modules"`
+	}
+	if err := json.Unmarshal(data, &mapForm); err == nil {
+		e.Modules = mapForm.Modules
+		if e.Modules == nil {
+			e.Modules = map[string]EnrichModule{}
+		}
+		return nil
+	}
+	var arrForm struct {
+		Modules []struct {
+			ID         string            `json:"id"`
+			Summary    string            `json:"summary,omitempty"`
+			Interfaces map[string]string `json:"interfaces,omitempty"`
+		} `json:"modules"`
+	}
+	if err := json.Unmarshal(data, &arrForm); err != nil {
+		return err
+	}
+	e.Modules = map[string]EnrichModule{}
+	for _, m := range arrForm.Modules {
+		if m.ID == "" {
+			return fmt.Errorf("enrichment array item is missing its \"id\"")
+		}
+		e.Modules[m.ID] = EnrichModule{Summary: m.Summary, Interfaces: m.Interfaces}
+	}
+	return nil
+}
+
 // EnrichResult reports how many items were stored.
 type EnrichResult struct {
 	Modules    int

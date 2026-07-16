@@ -50,10 +50,22 @@ does all file writing. Never hand-write project files yourself.
    `harness lint` and `harness test`. Relay results. If `harness lint` flags
    pre-existing formatting, run `harness fmt` (or `gofmt -w`) and re-lint.
 
-6. **Populate diagram prose (if diagrams enabled).** Follow the **harness-docs**
-   skill: `harness docs status --json` lists modules/interfaces with
-   `needsSummary`; write grounded prose and submit it with `harness docs enrich`,
-   then `harness docs render`. (`harness` never calls an LLM — you write the prose.)
+6. **Populate diagram prose (if diagrams enabled).** `harness` never calls an
+   LLM — you write the prose. Do it inline (the project-local harness-docs skill
+   only loads in a later session):
+   - `harness docs status --json` lists modules/interfaces with `needsSummary`.
+   - `harness docs status --template` prints a ready-to-fill payload with the
+     exact keys. Fill in each `summary`/interface string (grounded only in the
+     names, signatures, and doc-comments — don't invent behavior) and submit it:
+
+     ```sh
+     printf '%s' '{"modules":{"<module-id>":{"summary":"...","interfaces":{"<Name>":"..."}}}}' \
+       | harness docs enrich --from -
+     ```
+
+     (`modules` is an object keyed by module id; an array of `{"id":...}` objects
+     is also accepted.)
+   - Then `harness docs render`.
 
 7. **Tell the user the hooks activate next session.** The agent hooks and git
    hooks were just written; Claude Code loads hook config at session start, so

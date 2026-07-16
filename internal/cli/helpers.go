@@ -185,6 +185,7 @@ func docsStatus(args []string, out, errw io.Writer) int {
 	fs := flag.NewFlagSet("docs status", flag.ContinueOnError)
 	fs.SetOutput(errw)
 	asJSON := fs.Bool("json", false, "output JSON (the structures list for the agent)")
+	tmpl := fs.Bool("template", false, "output a ready-to-fill `docs enrich` payload for the pending items")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -203,6 +204,15 @@ func docsStatus(args []string, out, errw io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(errw, "harness docs status: %v\n", err)
 		return 1
+	}
+	if *tmpl {
+		data, err := rep.EnrichTemplate()
+		if err != nil {
+			fmt.Fprintf(errw, "harness docs status: %v\n", err)
+			return 1
+		}
+		_, _ = out.Write(append(data, '\n'))
+		return 0
 	}
 	if *asJSON {
 		data, err := rep.JSON()

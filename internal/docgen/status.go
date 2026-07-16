@@ -89,6 +89,44 @@ func (r StatusReport) JSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EnrichTemplate returns a ready-to-fill `harness docs enrich` payload
+// containing exactly the modules/interfaces whose prose is pending, with empty
+// strings for the agent to fill in. This removes any guesswork about the shape.
+func (r StatusReport) EnrichTemplate() ([]byte, error) {
+	type modTmpl struct {
+		Summary    string            `json:"summary"`
+		Interfaces map[string]string `json:"interfaces,omitempty"`
+	}
+	mods := map[string]modTmpl{}
+	for _, m := range r.Modules {
+		if !m.NeedsSummary {
+			pendingIfaces := map[string]string{}
+			for _, i := range m.Interfaces {
+				if i.NeedsDescription {
+					pendingIfaces[i.Name] = ""
+				}
+			}
+			if len(pendingIfaces) == 0 {
+				continue
+			}
+			mods[m.ID] = modTmpl{Interfaces: pendingIfaces}
+			continue
+		}
+		mt := modTmpl{}
+		for _, i := range m.Interfaces {
+			if i.NeedsDescription {
+				if mt.Interfaces == nil {
+					mt.Interfaces = map[string]string{}
+				}
+				mt.Interfaces[i.Name] = ""
+			}
+		}
+		mods[m.ID] = mt
+	}
+	out := map[string]any{"modules": mods}
+	return json.MarshalIndent(out, "", "  ")
+}
+
 // PendingCount returns the number of module summaries + interface descriptions
 // that are stale or missing.
 func (r StatusReport) PendingCount() int {
