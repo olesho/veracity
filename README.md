@@ -10,11 +10,37 @@ that delegate to the installed `harness` binary.
 
 ## Install
 
+From a checkout of this repo, run the install script — it builds the CLI, puts
+it on your Go bin path, and registers the `harness-setup` skill so you can drive
+setup from Claude Code:
+
 ```sh
-go install github.com/olesho/harness/cmd/harness@vX.Y.Z
+./scripts/install.sh
 ```
 
-(The module path `github.com/olesho/harness` is a placeholder — set it to your published module.)
+Then make sure your Go bin dir is on `PATH` (the script tells you if it isn't):
+
+```sh
+export PATH="$(go env GOPATH)/bin:$PATH"   # add to your shell profile
+harness version
+```
+
+Once the module is published to a host, this becomes a one-liner instead of a
+checkout: `go install <module>/cmd/harness@latest` followed by
+`harness install-skills`. (The module path `github.com/olesho/harness` is a
+placeholder until then.)
+
+## Set up in a Go project with Claude Code
+
+After installing, open Claude Code **in your project directory** and ask it to
+"set up harness in this project." It runs the `harness-setup` skill: it checks
+prerequisites, asks what you want (layout, features, capabilities), and runs
+`harness setup` + `harness bootstrap` + `harness verify` for you — you never
+hand-write the config.
+
+Prefer to do it yourself without the agent? See
+[Adopt an existing Go project](#adopt-an-existing-go-project) below for the
+direct `harness setup --adopt` command.
 
 ## Quick start (in an empty project directory)
 
