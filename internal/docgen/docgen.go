@@ -72,7 +72,22 @@ func RenderProject(root string, lock *lockfile.Lock, proj lockfile.Project, forc
 		wrote = wrote || w
 	}
 	if proj.Features.Diagrams {
-		w1, werr := writeIfChanged(filepath.Join(dir, "docs", "modules.svg"), RenderSVG(doc, store), force)
+		ds := BuildDiagrams(doc, store)
+		// modules.svg is the whole graph (small projects) or the group overview
+		// (chunked projects); per-group detail SVGs live under docs/modules/.
+		top := ds.Whole
+		if ds.Chunked {
+			top = ds.Overview
+			for _, g := range ds.Groups {
+				gp := filepath.Join(dir, "docs", "modules", g.Slug+".svg")
+				if w, werr := writeIfChanged(gp, g.SVG, force); werr != nil {
+					return wrote, werr
+				} else {
+					wrote = wrote || w
+				}
+			}
+		}
+		w1, werr := writeIfChanged(filepath.Join(dir, "docs", "modules.svg"), top, force)
 		if werr != nil {
 			return wrote, werr
 		}

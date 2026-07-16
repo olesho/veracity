@@ -35,8 +35,11 @@ func Go(projectDir, modulePath, subproject string) (ir.IR, error) {
 	// First pass: build modules keyed by import path.
 	modules := map[string]*ir.Module{}
 	imports := map[string][]string{} // importPath -> imported paths (intra-module)
+	// implSets[moduleID][typeName] = set of that type's method names, used to
+	// decide whether a module implements an interface from another module.
+	implSets := map[string]map[string]map[string]bool{}
 	for _, dir := range dirs {
-		mod, imps, err := extractGoPackage(projectDir, dir, modulePath)
+		mod, imps, impl, err := extractGoPackage(projectDir, dir, modulePath)
 		if err != nil {
 			return out, err
 		}
@@ -45,6 +48,7 @@ func Go(projectDir, modulePath, subproject string) (ir.IR, error) {
 		}
 		modules[mod.ID] = mod
 		imports[mod.ID] = imps
+		implSets[mod.ID] = impl
 	}
 
 	// Assemble modules in stable order.
@@ -57,15 +61,24 @@ func Go(projectDir, modulePath, subproject string) (ir.IR, error) {
 		out.Modules = append(out.Modules, *modules[id])
 	}
 
-	// Second pass: intra-project edges (only to modules we extracted).
+	// Second pass: intra-project edges (only to modules we extracted). Each edge
+	// is classified strictly: "implements" when a type in the source module
+	// satisfies an interface defined in the target module (structural method-set
+	// match), otherwise "depends on".
 	for _, id := range ids {
 		for _, imp := range imports[id] {
 			target, ok := modules[imp]
 			if !ok {
 				continue // outside the project
 			}
-			via := mediatingInterface(modules[id], target)
-			out.Edges = append(out.Edges, ir.Edge{From: id, To: imp, Via: via})
+			rel := ir.RelDependsOn
+			for _, iface := range target.Interfaces {
+				if moduleImplements(implSets[id], iface) {
+					rel = ir.RelImplements
+					break
+				}
+			}
+			out.Edges = append(out.Edges, ir.Edge{From: id, To: imp, Rel: rel})
 		}
 	}
 	sort.Slice(out.Edges, func(i, j int) bool {
@@ -111,11 +124,11 @@ func isIgnoredDir(name string) bool {
 	return fileset.Ignored(name + "/x")
 }
 
-func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string, error) {
+func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string, map[string]map[string]bool, error) {
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var files []*ast.File
 	var fileNames []string
@@ -126,13 +139,13 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 		full := filepath.Join(dir, e.Name())
 		f, perr := parser.ParseFile(fset, full, nil, parser.ParseComments)
 		if perr != nil {
-			return nil, nil, perr
+			return nil, nil, nil, perr
 		}
 		files = append(files, f)
 		fileNames = append(fileNames, full)
 	}
 	if len(files) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	name := files[0].Name.Name
 
@@ -143,9 +156,11 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 		importPath = modulePath + "/" + rel
 	}
 
-	dpkg, err := doc.NewFromFiles(fset, files, importPath)
+	// AllDecls so that unexported implementer types are visible for the
+	// implements/depends-on edge classification.
+	dpkg, err := doc.NewFromFiles(fset, files, importPath, doc.AllDecls)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	mod := &ir.Module{
@@ -168,7 +183,7 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	for _, rf := range mod.Files {
 		b, rerr := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(rf)))
 		if rerr != nil {
-			return nil, nil, rerr
+			return nil, nil, nil, rerr
 		}
 		fmt.Fprintf(mh, "%s\x00", rf)
 		mh.Write(b)
@@ -191,8 +206,13 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	}
 
 	// Types: interfaces become boundaries; others become type exports. Their
-	// constructor funcs are recorded as exports too.
+	// constructor funcs are recorded as exports too. Every type's method-name
+	// set is collected (exported or not) for the implements/depends-on check.
+	implSet := map[string]map[string]bool{}
 	for _, ty := range dpkg.Types {
+		if methods := methodNameSet(ty); len(methods) > 0 {
+			implSet[ty.Name] = methods
+		}
 		if !ast.IsExported(ty.Name) {
 			continue
 		}
@@ -239,7 +259,7 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	}
 	sort.Strings(imps)
 	imps = dedup(imps)
-	return mod, imps, nil
+	return mod, imps, implSet, nil
 }
 
 func interfaceType(ty *doc.Type) *ast.InterfaceType {
@@ -299,17 +319,58 @@ func printNode(fset *token.FileSet, node ast.Node) string {
 	return strings.TrimSpace(buf.String())
 }
 
-// mediatingInterface returns the name of an interface declared in `to` that is
-// referenced by any exported signature in `from`, or "" (best-effort heuristic).
-func mediatingInterface(from, to *ir.Module) string {
-	for _, iface := range to.Interfaces {
-		for _, exp := range from.Exports {
-			if strings.Contains(exp.Signature, iface.Name) {
-				return iface.Name
+// methodNameSet returns the set of a type's method names (used to decide
+// whether the type structurally satisfies an interface).
+func methodNameSet(ty *doc.Type) map[string]bool {
+	if len(ty.Methods) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(ty.Methods))
+	for _, m := range ty.Methods {
+		out[m.Name] = true
+	}
+	return out
+}
+
+// moduleImplements reports whether some type in a module (its type→method-set
+// map) satisfies iface, i.e. has every method name the interface declares. This
+// is a structural, name-level heuristic (no full type checking), which is enough
+// to distinguish an implementer from a mere consumer.
+func moduleImplements(typeMethods map[string]map[string]bool, iface ir.Interface) bool {
+	want := interfaceMethodNames(iface)
+	if len(want) == 0 {
+		return false // empty interface would match everything
+	}
+	for _, have := range typeMethods {
+		if len(have) < len(want) {
+			continue
+		}
+		all := true
+		for _, w := range want {
+			if !have[w] {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// interfaceMethodNames extracts the leading identifier of each method signature
+// (everything before the first "(").
+func interfaceMethodNames(iface ir.Interface) []string {
+	var names []string
+	for _, m := range iface.Methods {
+		if i := strings.Index(m.Signature, "("); i > 0 {
+			if n := strings.TrimSpace(m.Signature[:i]); n != "" {
+				names = append(names, n)
 			}
 		}
 	}
-	return ""
+	return names
 }
 
 // interfaceHash digests an interface's own declaration so its description is

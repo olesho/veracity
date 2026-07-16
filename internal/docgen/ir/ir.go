@@ -59,10 +59,17 @@ type Method struct {
 	DocComment string `json:"docComment,omitempty"`
 }
 
-// Edge is an intra-project dependency between modules, optionally labeled with
-// the interface that mediates it.
+// Edge is an intra-project dependency between modules. Rel is the strict
+// relationship label: "implements" when a type in From satisfies an interface
+// defined in To, otherwise "depends on".
 type Edge struct {
 	From string `json:"from"`
 	To   string `json:"to"`
-	Via  string `json:"via,omitempty"`
+	Rel  string `json:"rel"`
 }
+
+// Relationship labels used on edges.
+const (
+	RelImplements = "implements"
+	RelDependsOn  = "depends on"
+)
