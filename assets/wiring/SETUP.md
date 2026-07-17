@@ -21,3 +21,19 @@ config:
 harness setup --print-config-template > setup.json   # edit it, then:
 harness setup --config setup.json
 ```
+
+## SonarQube scanning (optional)
+
+Enabling the `sonar` feature (`harness edit <name> --confirm <name> --sonar on`)
+seeds a `sonar-project.properties` and runs a SonarQube scan on `pre-push` and in
+`harness ci`. SonarQube is a heavy, self-hosted service you install yourself; the
+harness never provisions it. The scan reads:
+
+- `SONAR_HOST_URL` — defaults to `http://localhost:9000`.
+- `SONAR_TOKEN` — a **local** API credential (SonarQube UI → My Account →
+  Security); nothing is sent off your machine. Falls back to
+  `~/Work/infra/sonarqube/.env` if the env var is unset.
+
+If Docker is missing, the server is unreachable, or no token is found, the scan
+**soft-skips with a warning and passes** — a fresh machine without SonarQube is
+never blocked. Run `harness doctor` to see whether a scan will run.

@@ -263,6 +263,9 @@ func ExtraChecks(root string, lock *lockfile.Lock, proj lockfile.Project, out io
 	if proj.Features.Coverage {
 		record(Coverage(root, lock, proj, out))
 	}
+	if proj.Features.Sonar {
+		record(Sonar(root, lock, proj, out))
+	}
 	return firstErr
 }
 

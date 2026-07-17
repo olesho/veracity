@@ -94,6 +94,8 @@ type Features struct {
 	Gci      bool `json:"gci,omitempty"`      // deterministic import section ordering
 	ModTidy  bool `json:"modTidy,omitempty"`  // `go mod tidy -diff` hygiene check
 	Coverage bool `json:"coverage,omitempty"` // total-coverage gate (see Project.CoverageMin)
+	// Language-agnostic verifiers.
+	Sonar bool `json:"sonar,omitempty"` // SonarQube scan (self-hosted; soft-skips when unreachable)
 }
 
 // goOnlyFeatures lists the feature JSON keys that are only valid for Go
@@ -120,6 +122,8 @@ func (f Features) Enabled(name string) bool {
 		return f.ModTidy
 	case "coverage":
 		return f.Coverage
+	case "sonar":
+		return f.Sonar
 	default:
 		return false
 	}

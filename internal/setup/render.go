@@ -147,6 +147,15 @@ func projectFiles(lock *lockfile.Lock, p lockfile.Project, includeSamples bool) 
 		// Project source and native config are seeded once, then owned by the user.
 		out = append(out, renderFile{Rel: join(s.dest), Content: content, Kind: ownership.Owned})
 	}
+	// Feature-gated project files: SonarQube needs a per-repo scan config. It is
+	// seeded once (Owned) so the user keeps/edits the project key.
+	if p.Features.Sonar {
+		content, err := renderAsset("wiring/sonar-project.properties.tmpl", data)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, renderFile{Rel: join("sonar-project.properties"), Content: content, Kind: ownership.Owned})
+	}
 	return out, nil
 }
 

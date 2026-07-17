@@ -46,6 +46,8 @@ type FeaturesInput struct {
 	Gci      *bool `json:"gci,omitempty"`
 	ModTidy  *bool `json:"modTidy,omitempty"`
 	Coverage *bool `json:"coverage,omitempty"`
+	// Language-agnostic verifiers.
+	Sonar *bool `json:"sonar,omitempty"`
 }
 
 // Presets.

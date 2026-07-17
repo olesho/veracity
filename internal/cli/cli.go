@@ -154,8 +154,37 @@ func cmdDoctor(out io.Writer) int {
 				}
 			}
 		}
+		// SonarQube is an external, manually-installed service — probe its
+		// availability non-fatally so the user knows whether an enabled sonar
+		// verifier will run or soft-skip.
+		if anySonar(lock) {
+			s := runner.ProbeSonar()
+			fmt.Fprintln(out, "\nsonarqube (external service):")
+			okmiss := func(ok bool) string {
+				if ok {
+					return "ok  "
+				}
+				return "MISS"
+			}
+			fmt.Fprintf(out, "  %s  docker\n", okmiss(s.DockerOK))
+			fmt.Fprintf(out, "  %s  server         %s\n", okmiss(s.Reachable), s.Host)
+			fmt.Fprintf(out, "  %s  token          SONAR_TOKEN (env) or ~/Work/infra/sonarqube/.env\n", okmiss(s.HasToken))
+			if !s.DockerOK || !s.Reachable || !s.HasToken {
+				fmt.Fprintln(out, "  note: sonar scans soft-skip (WARN, no failure) until all three are present")
+			}
+		}
 	}
 	return 0
+}
+
+// anySonar reports whether any project in the lock enables the sonar verifier.
+func anySonar(lock *lockfile.Lock) bool {
+	for _, p := range lock.Projects {
+		if p.Features.Sonar {
+			return true
+		}
+	}
+	return false
 }
 
 func cmdSetup(args []string, stdin io.Reader, out, errw io.Writer) int {
@@ -246,7 +275,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	// The project name is the first argument so that flags may follow it (Go's
 	// flag package stops at the first positional, so we peel the name off first).
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N]")
+		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N] [--sonar on|off]")
 		return 2
 	}
 	name := args[0]
@@ -262,6 +291,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	modTidy := fs.String("mod-tidy", "", "on|off (Go)")
 	coverage := fs.String("coverage", "", "on|off (Go)")
 	coverageMin := fs.Int("coverage-min", 0, "minimum total coverage percent 0-100 (Go)")
+	sonar := fs.String("sonar", "", "on|off (SonarQube scan; any language)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -277,6 +307,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 		Features: setup.FeaturesInput{
 			Lint: onOff(*lint), Test: onOff(*test), Markdown: onOff(*markdown), Diagrams: onOff(*diagrams),
 			Gofumpt: onOff(*gofumpt), Gci: onOff(*gci), ModTidy: onOff(*modTidy), Coverage: onOff(*coverage),
+			Sonar: onOff(*sonar),
 		},
 		CoverageMin: covMin,
 	}
@@ -554,7 +585,7 @@ const configTemplate = `{
       "name": "myproj",
       "language": "go",
       "modulePath": "example.com/myproj",
-      "features": { "lint": true, "test": true, "markdown": false, "diagrams": false, "gofumpt": false, "gci": false, "modTidy": false, "coverage": false },
+      "features": { "lint": true, "test": true, "markdown": false, "diagrams": false, "gofumpt": false, "gci": false, "modTidy": false, "coverage": false, "sonar": false },
       "coverageMin": 0
     }
   ]

@@ -45,6 +45,9 @@ func resolveProject(p ProjectInput, def presetDefaults) (lockfile.Project, error
 		if f.Coverage != nil {
 			feat.Coverage = *f.Coverage
 		}
+		if f.Sonar != nil {
+			feat.Sonar = *f.Sonar
+		}
 	}
 	if feat.Diagrams {
 		feat.Markdown = true
@@ -151,6 +154,9 @@ func Edit(root, name, confirm string, in EditInput) (*Result, error) {
 	}
 	if feats.Coverage != nil {
 		f.Coverage = *feats.Coverage
+	}
+	if feats.Sonar != nil {
+		f.Sonar = *feats.Sonar
 	}
 	if f.Diagrams {
 		f.Markdown = true // invariant enforced in the engine
