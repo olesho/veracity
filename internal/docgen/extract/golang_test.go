@@ -74,4 +74,23 @@ func (a *App) Run() {}
 	if got := rel["example.com/x/app"]; got != ir.RelDependsOn {
 		t.Errorf("app→store = %q, want depends on", got)
 	}
+
+	// Per-interface implementers/consumers.
+	var store *ir.Interface
+	for mi := range doc.Modules {
+		for ii := range doc.Modules[mi].Interfaces {
+			if doc.Modules[mi].Interfaces[ii].Name == "Store" {
+				store = &doc.Modules[mi].Interfaces[ii]
+			}
+		}
+	}
+	if store == nil {
+		t.Fatal("Store interface not found")
+	}
+	if len(store.Implementers) != 1 || store.Implementers[0].Module != "example.com/x/mem" || store.Implementers[0].Type != "Mem" {
+		t.Errorf("Store.Implementers = %+v, want [{mem Mem}]", store.Implementers)
+	}
+	if len(store.Consumers) != 1 || store.Consumers[0] != "example.com/x/app" {
+		t.Errorf("Store.Consumers = %+v, want [app]", store.Consumers)
+	}
 }

@@ -72,30 +72,34 @@ func RenderProject(root string, lock *lockfile.Lock, proj lockfile.Project, forc
 		wrote = wrote || w
 	}
 	if proj.Features.Diagrams {
-		ds := BuildDiagrams(doc, store)
-		// modules.svg is the whole graph (small projects) or the group overview
-		// (chunked projects); per-group detail SVGs live under docs/modules/.
-		top := ds.Whole
-		if ds.Chunked {
-			top = ds.Overview
-			for _, g := range ds.Groups {
-				gp := filepath.Join(dir, "docs", "modules", g.Slug+".svg")
-				if w, werr := writeIfChanged(gp, g.SVG, force); werr != nil {
-					return wrote, werr
-				} else {
-					wrote = wrote || w
-				}
+		docsDir := filepath.Join(dir, "docs")
+		// Primary: one interface-centric SVG per interface.
+		for _, d := range BuildInterfaceDiagrams(doc, store) {
+			p := filepath.Join(docsDir, "interfaces", d.Slug+".svg")
+			w, werr := writeIfChanged(p, d.SVG, force)
+			if werr != nil {
+				return wrote, werr
 			}
+			wrote = wrote || w
 		}
-		w1, werr := writeIfChanged(filepath.Join(dir, "docs", "modules.svg"), top, force)
+		// Secondary: a module dependency overview (whole graph, or group overview
+		// when large).
+		ds := BuildDiagrams(doc, store)
+		overview := ds.Whole
+		if ds.Chunked {
+			overview = ds.Overview
+		}
+		w1, werr := writeIfChanged(filepath.Join(docsDir, "modules.svg"), overview, force)
 		if werr != nil {
 			return wrote, werr
 		}
-		w2, werr := writeIfChanged(filepath.Join(dir, "docs", "modules.html"), RenderHTML(doc, store), force)
+		w2, werr := writeIfChanged(filepath.Join(docsDir, "modules.html"), RenderHTML(doc, store), force)
 		if werr != nil {
 			return wrote, werr
 		}
 		wrote = wrote || w1 || w2
+		// Remove orphaned per-group SVGs from the previous module-graph layout.
+		_ = os.RemoveAll(filepath.Join(docsDir, "modules"))
 	}
 	return wrote, nil
 }

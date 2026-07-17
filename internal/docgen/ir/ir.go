@@ -43,7 +43,8 @@ type Export struct {
 }
 
 // Interface is a boundary contract (Go interface, Python Protocol/ABC, TS
-// interface) with its method set.
+// interface) with its method set and the entities on either side of it: the
+// modules that depend on it and the concrete types that implement it.
 type Interface struct {
 	Name string `json:"name"`
 	// ContentHash digests the interface's own declaration (name + doc + method
@@ -51,6 +52,17 @@ type Interface struct {
 	ContentHash string   `json:"contentHash"`
 	DocComment  string   `json:"docComment,omitempty"`
 	Methods     []Method `json:"methods"`
+	// Implementers are the concrete types across the project that satisfy this
+	// interface (structural method-set match). Consumers are the module ids that
+	// depend on it (reference it without implementing it).
+	Implementers []Implementer `json:"implementers,omitempty"`
+	Consumers    []string      `json:"consumers,omitempty"`
+}
+
+// Implementer is a concrete type that satisfies an interface.
+type Implementer struct {
+	Module string `json:"module"` // module id of the implementing type
+	Type   string `json:"type"`   // concrete type name
 }
 
 // Method is one method of an interface.

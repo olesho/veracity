@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olesho/harness/internal/docgen/ir"
 	"github.com/olesho/harness/internal/lockfile"
 )
 
@@ -142,6 +143,30 @@ func TestRenderSVGAndHTML(t *testing.T) {
 	html := string(RenderHTML(doc, store))
 	if !strings.Contains(html, "<!doctype html>") || !strings.Contains(html, "The greeting boundary.") {
 		t.Fatal("HTML missing expected content")
+	}
+}
+
+func TestRenderInterfaceSVG(t *testing.T) {
+	mod := ir.Module{ID: "x/store", Name: "store", Path: "store"}
+	iface := ir.Interface{
+		Name:         "Store",
+		Methods:      []ir.Method{{Signature: "Get(id int) (string, error)"}},
+		Consumers:    []string{"x/app", "x/cli"},
+		Implementers: []ir.Implementer{{Module: "x/mem", Type: "Mem"}, {Module: "x/sql", Type: "SQL"}},
+	}
+	svg := string(RenderInterfaceSVG(mod, iface, nil))
+	for _, want := range []string{"interface Store", "depends on", "implements", ">app<", ">cli<", ">Mem<", ">SQL<", "Get(id int)"} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("interface SVG missing %q", want)
+		}
+	}
+	if string(RenderInterfaceSVG(mod, iface, nil)) != svg {
+		t.Fatal("interface SVG not deterministic")
+	}
+	// Hostile consumer name must be escaped.
+	bad := ir.Interface{Name: "Y", Consumers: []string{"x/<script>"}, Methods: iface.Methods}
+	if strings.Contains(string(RenderInterfaceSVG(mod, bad, nil)), "<script>") {
+		t.Fatal("interface SVG did not escape a hostile consumer name")
 	}
 }
 

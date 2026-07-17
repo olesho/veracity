@@ -35,41 +35,79 @@ func Go(projectDir, modulePath, subproject string) (ir.IR, error) {
 	// First pass: build modules keyed by import path.
 	modules := map[string]*ir.Module{}
 	imports := map[string][]string{} // importPath -> imported paths (intra-module)
-	// implSets[moduleID][typeName] = set of that type's method names, used to
-	// decide whether a module implements an interface from another module.
+	// implSets[moduleID][typeName] = set of that type's method names.
 	implSets := map[string]map[string]map[string]bool{}
+	// refSets[moduleID][importPath] = set of referenced symbol names (for
+	// consumer detection).
+	refSets := map[string]map[string]map[string]bool{}
 	for _, dir := range dirs {
-		mod, imps, impl, err := extractGoPackage(projectDir, dir, modulePath)
+		r, err := extractGoPackage(projectDir, dir, modulePath)
 		if err != nil {
 			return out, err
 		}
-		if mod == nil {
+		if r == nil || r.mod == nil {
 			continue
 		}
-		modules[mod.ID] = mod
-		imports[mod.ID] = imps
-		implSets[mod.ID] = impl
+		modules[r.mod.ID] = r.mod
+		imports[r.mod.ID] = r.imports
+		implSets[r.mod.ID] = r.implSet
+		refSets[r.mod.ID] = r.refs
 	}
 
-	// Assemble modules in stable order.
 	ids := make([]string, 0, len(modules))
 	for id := range modules {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+
+	// Populate, per interface, the entities on each side of the boundary:
+	// implementers (concrete types anywhere that satisfy it) and consumers
+	// (modules that reference it without implementing it).
+	for _, mid := range ids {
+		m := modules[mid]
+		for i := range m.Interfaces {
+			iface := &m.Interfaces[i]
+			want := interfaceMethodNames(*iface)
+			if len(want) == 0 {
+				continue
+			}
+			implModules := map[string]bool{}
+			for _, gid := range ids {
+				tnames := make([]string, 0, len(implSets[gid]))
+				for tn := range implSets[gid] {
+					tnames = append(tnames, tn)
+				}
+				sort.Strings(tnames)
+				for _, tn := range tnames {
+					if hasAllMethods(implSets[gid][tn], want) {
+						iface.Implementers = append(iface.Implementers, ir.Implementer{Module: gid, Type: tn})
+						implModules[gid] = true
+					}
+				}
+			}
+			for _, gid := range ids {
+				if gid == mid || implModules[gid] {
+					continue
+				}
+				if refSets[gid][mid] != nil && refSets[gid][mid][iface.Name] {
+					iface.Consumers = append(iface.Consumers, gid)
+				}
+			}
+		}
+	}
+
 	for _, id := range ids {
 		out.Modules = append(out.Modules, *modules[id])
 	}
 
-	// Second pass: intra-project edges (only to modules we extracted). Each edge
-	// is classified strictly: "implements" when a type in the source module
-	// satisfies an interface defined in the target module (structural method-set
-	// match), otherwise "depends on".
+	// Module-level edges (kept for the module dependency overview): "implements"
+	// when a type in the source satisfies an interface in the target, else
+	// "depends on".
 	for _, id := range ids {
 		for _, imp := range imports[id] {
 			target, ok := modules[imp]
 			if !ok {
-				continue // outside the project
+				continue
 			}
 			rel := ir.RelDependsOn
 			for _, iface := range target.Interfaces {
@@ -88,6 +126,14 @@ func Go(projectDir, modulePath, subproject string) (ir.IR, error) {
 		return out.Edges[i].To < out.Edges[j].To
 	})
 	return out, nil
+}
+
+// pkgResult bundles one package's extraction outputs.
+type pkgResult struct {
+	mod     *ir.Module
+	imports []string
+	implSet map[string]map[string]bool // typeName -> method-name set
+	refs    map[string]map[string]bool // importPath -> referenced symbol names
 }
 
 // goPackageDirs returns directories under projectDir that contain non-test .go
@@ -124,11 +170,11 @@ func isIgnoredDir(name string) bool {
 	return fileset.Ignored(name + "/x")
 }
 
-func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string, map[string]map[string]bool, error) {
+func extractGoPackage(projectDir, dir, modulePath string) (*pkgResult, error) {
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	var files []*ast.File
 	var fileNames []string
@@ -139,13 +185,13 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 		full := filepath.Join(dir, e.Name())
 		f, perr := parser.ParseFile(fset, full, nil, parser.ParseComments)
 		if perr != nil {
-			return nil, nil, nil, perr
+			return nil, perr
 		}
 		files = append(files, f)
 		fileNames = append(fileNames, full)
 	}
 	if len(files) == 0 {
-		return nil, nil, nil, nil
+		return nil, nil
 	}
 	name := files[0].Name.Name
 
@@ -157,10 +203,10 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	}
 
 	// AllDecls so that unexported implementer types are visible for the
-	// implements/depends-on edge classification.
+	// implements/depends-on classification.
 	dpkg, err := doc.NewFromFiles(fset, files, importPath, doc.AllDecls)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	mod := &ir.Module{
@@ -183,7 +229,7 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	for _, rf := range mod.Files {
 		b, rerr := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(rf)))
 		if rerr != nil {
-			return nil, nil, nil, rerr
+			return nil, rerr
 		}
 		fmt.Fprintf(mh, "%s\x00", rf)
 		mh.Write(b)
@@ -259,7 +305,65 @@ func extractGoPackage(projectDir, dir, modulePath string) (*ir.Module, []string,
 	}
 	sort.Strings(imps)
 	imps = dedup(imps)
-	return mod, imps, implSet, nil
+	return &pkgResult{mod: mod, imports: imps, implSet: implSet, refs: collectReferences(files, modulePath)}, nil
+}
+
+// collectReferences maps each imported project package to the set of its symbols
+// this package references (via qualified selectors like `ticket.Store`), used to
+// find the consumers of an interface.
+func collectReferences(files []*ast.File, modulePath string) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for _, f := range files {
+		local := map[string]string{} // local package name -> import path
+		for _, imp := range f.Imports {
+			p := strings.Trim(imp.Path.Value, `"`)
+			if !strings.HasPrefix(p, modulePath) {
+				continue
+			}
+			nm := p[strings.LastIndex(p, "/")+1:]
+			if imp.Name != nil {
+				nm = imp.Name.Name
+			}
+			if nm == "_" || nm == "." {
+				continue
+			}
+			local[nm] = p
+		}
+		if len(local) == 0 {
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			id, ok := sel.X.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if p, ok := local[id.Name]; ok {
+				if out[p] == nil {
+					out[p] = map[string]bool{}
+				}
+				out[p][sel.Sel.Name] = true
+			}
+			return true
+		})
+	}
+	return out
+}
+
+// hasAllMethods reports whether have contains every name in want.
+func hasAllMethods(have map[string]bool, want []string) bool {
+	if len(have) < len(want) {
+		return false
+	}
+	for _, w := range want {
+		if !have[w] {
+			return false
+		}
+	}
+	return true
 }
 
 func interfaceType(ty *doc.Type) *ast.InterfaceType {
