@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/olesho/harness/internal/docgen/ir"
-	"github.com/olesho/harness/internal/lockfile"
 )
 
 func TestContentHashStableAndSensitive(t *testing.T) {
@@ -125,24 +124,25 @@ func TestRenderSVGAndHTML(t *testing.T) {
 	doc, _ := ExtractProject(root, lock, proj)
 	store, _ := loadSummaries(projectDir(root, lock, proj))
 
-	svg := RenderSVG(doc, store)
-	svgStr := string(svg)
+	// RenderSVG is the simple module dependency graph (node names, no interface
+	// detail).
+	svgStr := string(RenderSVG(doc))
 	if !strings.HasPrefix(svgStr, "<svg") || !strings.Contains(svgStr, "</svg>") {
 		t.Fatal("SVG malformed")
 	}
-	for _, want := range []string{"greeter", "interface Greeter", "Greet(name string) string", "Greets people warmly."} {
-		if !strings.Contains(svgStr, want) {
-			t.Errorf("SVG missing %q", want)
-		}
+	if !strings.Contains(svgStr, "greeter") {
+		t.Errorf("module graph SVG missing the module name")
 	}
-	// Deterministic.
-	if string(RenderSVG(doc, store)) != svgStr {
+	if string(RenderSVG(doc)) != svgStr {
 		t.Fatal("SVG render not deterministic")
 	}
 
+	// The interface detail lives in the HTML gallery.
 	html := string(RenderHTML(doc, store))
-	if !strings.Contains(html, "<!doctype html>") || !strings.Contains(html, "The greeting boundary.") {
-		t.Fatal("HTML missing expected content")
+	for _, want := range []string{"<!doctype html>", "interface Greeter", "Greet(name string) string", "The greeting boundary."} {
+		if !strings.Contains(html, want) {
+			t.Errorf("HTML missing %q", want)
+		}
 	}
 }
 
@@ -171,21 +171,13 @@ func TestRenderInterfaceSVG(t *testing.T) {
 }
 
 func TestRenderSVGEscapesMarkup(t *testing.T) {
-	root := t.TempDir()
-	writeF(t, root, "go.mod", "module example.com/x\n\ngo 1.24\n")
-	// A doc comment containing HTML/script must be escaped in the SVG.
-	writeF(t, root, "m/m.go", "// Package m has <script>alert(1)</script> in its doc.\npackage m\n\n// I is an iface.\ntype I interface{ F() }\n")
-	lock := &lockfile.Lock{
-		SchemaVersion: lockfile.SchemaVersion, Layout: lockfile.LayoutSingle,
-		Projects: []lockfile.Project{{Name: "x", Language: lockfile.LangGo, ModulePath: "example.com/x", Features: lockfile.Features{Diagrams: true, Markdown: true}}},
-	}
-	doc, _ := ExtractProject(root, lock, lock.Projects[0])
-	// Put hostile prose into the store too.
-	_, _ = Enrich(root, lock, lock.Projects[0], []byte(`{"modules":{"example.com/x/m":{"summary":"<img src=x onerror=alert(1)>"}}}`))
-	store, _ := loadSummaries(root)
-	svg := string(RenderSVG(doc, store))
-	if strings.Contains(svg, "<script>") || strings.Contains(svg, "<img src=x") {
-		t.Fatalf("SVG did not escape hostile markup:\n%s", svg)
+	// A crafted hostile module name/path must be escaped in the dependency graph.
+	doc := ir.IR{Subproject: "x", Modules: []ir.Module{
+		{ID: "x/m", Name: "<script>alert(1)</script>", Path: "m<b>"},
+	}}
+	svg := string(RenderSVG(doc))
+	if strings.Contains(svg, "<script>") || strings.Contains(svg, "<b>") {
+		t.Fatalf("module graph did not escape hostile markup:\n%s", svg)
 	}
 }
 

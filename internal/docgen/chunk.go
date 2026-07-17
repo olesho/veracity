@@ -23,44 +23,22 @@ type group struct {
 	Modules []ir.Module
 }
 
-// GroupDiagram is one package group's rendered detail diagram.
-type GroupDiagram struct {
-	Key     string
-	Slug    string
-	SVG     []byte
-	Modules []ir.Module
-}
-
-// DiagramSet is the full rendered output for a project: either a single
-// whole-graph SVG (small projects) or an overview plus per-group SVGs (large).
+// DiagramSet is the rendered module dependency graph: the whole graph for small
+// projects, or a package-group overview for large ones.
 type DiagramSet struct {
 	Chunked  bool
 	Whole    []byte
 	Overview []byte
-	Groups   []GroupDiagram
 }
 
-// BuildDiagrams renders a project's diagrams, chunking by package group when the
-// module count exceeds the threshold.
-func BuildDiagrams(doc ir.IR, store *Summaries) DiagramSet {
-	if store == nil {
-		store = newSummaries()
-	}
+// BuildDiagrams renders the module dependency graph, collapsing to a package
+// group overview when the module count exceeds the threshold.
+func BuildDiagrams(doc ir.IR) DiagramSet {
 	groups, chunked := groupModules(doc.Modules)
 	if !chunked {
-		return DiagramSet{Chunked: false, Whole: RenderSVG(doc, store)}
+		return DiagramSet{Chunked: false, Whole: RenderSVG(doc)}
 	}
-	groupOf := moduleGroupMap(groups)
-	ds := DiagramSet{Chunked: true, Overview: renderOverviewSVG(groups, doc.Edges)}
-	for _, g := range groups {
-		ds.Groups = append(ds.Groups, GroupDiagram{
-			Key:     g.Key,
-			Slug:    groupSlug(g.Key),
-			SVG:     renderGroupSVG(g, doc.Edges, groupOf, store),
-			Modules: g.Modules,
-		})
-	}
-	return ds
+	return DiagramSet{Chunked: true, Overview: renderOverviewSVG(groups, doc.Edges)}
 }
 
 // groupModules buckets modules by an import-path prefix chosen so groups stay a
@@ -177,49 +155,5 @@ func renderGroupBox(g group) (string, int) {
 	fmt.Fprintf(&b, `<rect width="%d" height="%d" rx="8" fill="#eef2ff" stroke="#4338ca" stroke-width="2"/>`, svgCardW, h)
 	fmt.Fprintf(&b, `<text x="%d" y="22" font-size="13" font-weight="700" fill="#312e81">%s</text>`, svgPad, xmlEsc(truncate(groupLabel(g.Key), svgWrapChars)))
 	fmt.Fprintf(&b, `<text x="%d" y="39" font-size="10" fill="#4338ca">%d module(s)</text>`, svgPad, len(g.Modules))
-	return b.String(), h
-}
-
-// renderGroupSVG draws one group's modules with full intra-group edges; edges to
-// other groups terminate at a compact "ghost" node naming the target group.
-func renderGroupSVG(g group, allEdges []ir.Edge, groupOf map[string]string, store *Summaries) []byte {
-	inGroup := map[string]bool{}
-	for _, m := range g.Modules {
-		inGroup[m.ID] = true
-	}
-	nodes := make([]svgNode, 0, len(g.Modules))
-	for _, m := range g.Modules {
-		body, h := renderCard(m, store)
-		nodes = append(nodes, svgNode{id: m.ID, h: h, body: body})
-	}
-	ghosts := map[string]bool{}
-	seenEdge := map[string]bool{}
-	var edges []svgEdge
-	for _, e := range allEdges {
-		switch {
-		case inGroup[e.From] && inGroup[e.To]:
-			edges = append(edges, svgEdge{from: e.From, to: e.To, label: e.Rel, dashed: e.Rel == ir.RelImplements})
-		case inGroup[e.From] && !inGroup[e.To]:
-			gid := "group:" + groupOf[e.To]
-			if !ghosts[gid] {
-				body, h := renderGhost(groupLabel(groupOf[e.To]))
-				nodes = append(nodes, svgNode{id: gid, h: h, body: body})
-				ghosts[gid] = true
-			}
-			ek := e.From + "|" + gid + "|" + e.Rel
-			if !seenEdge[ek] {
-				seenEdge[ek] = true
-				edges = append(edges, svgEdge{from: e.From, to: gid, label: e.Rel, dashed: e.Rel == ir.RelImplements})
-			}
-		}
-	}
-	return layoutSVG(nodes, edges)
-}
-
-func renderGhost(label string) (string, int) {
-	const h = 34
-	var b strings.Builder
-	fmt.Fprintf(&b, `<rect width="%d" height="%d" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>`, svgCardW, h)
-	fmt.Fprintf(&b, `<text x="%d" y="21" font-size="12" fill="#475569">→ %s</text>`, svgPad, xmlEsc(truncate(label, svgWrapChars)))
 	return b.String(), h
 }

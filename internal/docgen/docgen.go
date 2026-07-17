@@ -84,7 +84,7 @@ func RenderProject(root string, lock *lockfile.Lock, proj lockfile.Project, forc
 		}
 		// Secondary: a module dependency overview (whole graph, or group overview
 		// when large).
-		ds := BuildDiagrams(doc, store)
+		ds := BuildDiagrams(doc)
 		overview := ds.Whole
 		if ds.Chunked {
 			overview = ds.Overview

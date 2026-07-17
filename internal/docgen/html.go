@@ -70,7 +70,7 @@ func RenderHTML(doc ir.IR, store *Summaries) []byte {
 	}
 
 	// Module dependency overview (secondary context).
-	ds := BuildDiagrams(doc, store)
+	ds := BuildDiagrams(doc)
 	if ds.Chunked {
 		data.ModuleGraph = template.HTML(ds.Overview) //nolint:gosec // pre-escaped
 	} else {

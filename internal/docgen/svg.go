@@ -39,26 +39,34 @@ type svgEdge struct {
 	dashed   bool
 }
 
-// RenderSVG produces a deterministic architecture diagram for a whole project's
-// IR, using stored summaries where fresh. Modules are cards; each card contains
-// its interfaces as boundary blocks; edges are labeled implements/depends on.
-func RenderSVG(doc ir.IR, store *Summaries) []byte {
+// RenderSVG produces a simple module dependency graph: one node per module
+// (name + path) with plain dependency arrows. It deliberately omits interface
+// blocks and implements/depends-on nuance — those live in the per-interface
+// diagrams (see RenderInterfaceSVG).
+func RenderSVG(doc ir.IR) []byte {
 	mods := append([]ir.Module(nil), doc.Modules...)
 	sort.SliceStable(mods, func(i, j int) bool { return mods[i].ID < mods[j].ID })
 	nodes := make([]svgNode, 0, len(mods))
 	for _, m := range mods {
-		body, h := renderCard(m, store)
+		body, h := renderModuleNode(m)
 		nodes = append(nodes, svgNode{id: m.ID, h: h, body: body})
 	}
-	return layoutSVG(nodes, edgesToSVG(doc.Edges))
+	edges := make([]svgEdge, 0, len(doc.Edges))
+	for _, e := range doc.Edges {
+		edges = append(edges, svgEdge{from: e.From, to: e.To})
+	}
+	return layoutSVG(nodes, edges)
 }
 
-func edgesToSVG(edges []ir.Edge) []svgEdge {
-	out := make([]svgEdge, 0, len(edges))
-	for _, e := range edges {
-		out = append(out, svgEdge{from: e.From, to: e.To, label: e.Rel, dashed: e.Rel == ir.RelImplements})
-	}
-	return out
+// renderModuleNode draws a compact module box (name + path) for the dependency
+// graph.
+func renderModuleNode(m ir.Module) (string, int) {
+	const h = 46
+	var b strings.Builder
+	fmt.Fprintf(&b, `<rect width="%d" height="%d" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="2"/>`, svgCardW, h)
+	fmt.Fprintf(&b, `<text x="%d" y="20" font-size="13" font-weight="700" fill="#0f172a">%s</text>`, svgPad, xmlEsc(truncate(m.Name, svgWrapChars)))
+	fmt.Fprintf(&b, `<text x="%d" y="37" font-size="10" font-family="ui-monospace, monospace" fill="#64748b">%s</text>`, svgPad, xmlEsc(truncate(m.Path, svgWrapChars)))
+	return b.String(), h
 }
 
 // layoutSVG lays out nodes in dependency layers (left→right), stacks them within
@@ -151,67 +159,6 @@ type box struct {
 	x, y int
 	h    int
 	body string
-}
-
-// renderCard draws one module card at local origin and returns its SVG fragment
-// and computed height.
-func renderCard(m ir.Module, store *Summaries) (string, int) {
-	var b strings.Builder
-	y := svgPad + svgHeaderH
-
-	summary := store.moduleSummary(m)
-	summaryLines := wrapText(summary, svgWrapChars, svgSummaryMax)
-	if summary == "" {
-		summaryLines = []string{"(summary pending — run harness-docs)"}
-	}
-	y += len(summaryLines) * svgLineH
-	y += svgPad
-
-	type ib struct {
-		iface ir.Interface
-		desc  []string
-		h     int
-	}
-	var blocks []ib
-	for _, iface := range m.Interfaces {
-		desc := store.interfaceDescription(m, iface)
-		descLines := wrapText(desc, svgWrapChars, svgDescMax)
-		if desc == "" {
-			descLines = nil
-		}
-		h := svgIfacePad*2 + svgLineH + len(iface.Methods)*svgLineH + len(descLines)*svgLineH
-		blocks = append(blocks, ib{iface: iface, desc: descLines, h: h})
-		y += h + svgIfacePad
-	}
-	cardH := y + svgPad
-
-	fmt.Fprintf(&b, `<rect width="%d" height="%d" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="2"/>`, svgCardW, cardH)
-	fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="14" font-weight="700" fill="#0f172a">%s</text>`, svgPad, svgPad+15, xmlEsc(m.Name))
-	fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="10" font-family="ui-monospace, monospace" fill="#64748b">%s</text>`, svgPad, svgPad+30, xmlEsc(truncate(m.Path, svgWrapChars)))
-
-	ty := svgPad + svgHeaderH + 11
-	for _, line := range summaryLines {
-		fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="11" fill="#334155">%s</text>`, svgPad, ty, xmlEsc(line))
-		ty += svgLineH
-	}
-	ty += svgPad
-
-	for _, blk := range blocks {
-		fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="%d" rx="5" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" stroke-dasharray="5 3"/>`, svgPad, ty, svgCardW-2*svgPad, blk.h)
-		iy := ty + svgIfacePad + 11
-		fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="11" font-weight="700" fill="#92400e">interface %s</text>`, svgPad+svgIfacePad, iy, xmlEsc(blk.iface.Name))
-		iy += svgLineH
-		for _, meth := range blk.iface.Methods {
-			fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="10" font-family="ui-monospace, monospace" fill="#78350f">%s</text>`, svgPad+svgIfacePad, iy, xmlEsc(truncate(meth.Signature, svgMethodMax)))
-			iy += svgLineH
-		}
-		for _, line := range blk.desc {
-			fmt.Fprintf(&b, `<text x="%d" y="%d" font-size="10" fill="#92400e">%s</text>`, svgPad+svgIfacePad, iy, xmlEsc(line))
-			iy += svgLineH
-		}
-		ty += blk.h + svgIfacePad
-	}
-	return b.String(), cardH
 }
 
 // wrapText greedily wraps s into lines of at most maxChars, capping at maxLines

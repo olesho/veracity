@@ -91,14 +91,14 @@ func TestSingleGoFullFlow(t *testing.T) {
 		t.Fatalf("expected 0 pending after enrich: %s", out)
 	}
 
-	// The rendered SVG must contain the module and its interface boundary.
-	svg, err := os.ReadFile(filepath.Join(root, "docs", "modules.svg"))
+	// The interface-centric diagram must contain the interface and its methods.
+	ifaceSVG, err := os.ReadFile(filepath.Join(root, "docs", "interfaces", "example-Greeter.svg"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("interface SVG not written: %v", err)
 	}
-	for _, want := range []string{"interface Greeter", "Greet(name string) string"} {
-		if !strings.Contains(string(svg), want) {
-			t.Errorf("SVG missing %q", want)
+	for _, want := range []string{"interface Greeter", "Greet(name string) string", "implements"} {
+		if !strings.Contains(string(ifaceSVG), want) {
+			t.Errorf("interface SVG missing %q", want)
 		}
 	}
 }

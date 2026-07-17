@@ -57,45 +57,26 @@ func TestBuildDiagramsChunked(t *testing.T) {
 			{From: "x/internal/a/m0", To: "x/internal/b/m0", Rel: ir.RelDependsOn},
 		},
 	}
-	ds := BuildDiagrams(doc, nil)
+	ds := BuildDiagrams(doc)
 	if !ds.Chunked {
 		t.Fatal("expected chunked output")
 	}
 	if len(ds.Overview) == 0 {
 		t.Fatal("expected an overview SVG")
 	}
-	if len(ds.Groups) != 2 {
-		t.Fatalf("expected 2 group diagrams, got %d", len(ds.Groups))
-	}
-	// The overview must name the groups and show the cross-group edge.
+	// The overview names the groups and draws the cross-group dependency edge.
 	ov := string(ds.Overview)
 	if !strings.Contains(ov, "internal/a") || !strings.Contains(ov, "internal/b") {
 		t.Errorf("overview missing group labels:\n%s", ov[:min(len(ov), 400)])
 	}
-	// Each group SVG must be a valid, non-empty svg.
-	for _, g := range ds.Groups {
-		if !strings.HasPrefix(string(g.SVG), "<svg") {
-			t.Errorf("group %s SVG malformed", g.Key)
-		}
-		if g.Slug == "" {
-			t.Errorf("group %s has empty slug", g.Key)
-		}
-	}
-	// The group holding m0 of internal/a should show a ghost edge to internal/b.
-	var aSVG string
-	for _, g := range ds.Groups {
-		if g.Key == "internal/a" {
-			aSVG = string(g.SVG)
-		}
-	}
-	if !strings.Contains(aSVG, "→ internal/b") {
-		t.Errorf("internal/a group should show a cross-group ghost to internal/b")
+	if !strings.Contains(ov, "<line ") {
+		t.Errorf("overview missing the cross-group dependency edge")
 	}
 }
 
 func TestBuildDiagramsSingle(t *testing.T) {
 	doc := ir.IR{SchemaVersion: ir.SchemaVersion, Subproject: "s", Modules: modulesUnder("pkg", 3)}
-	ds := BuildDiagrams(doc, nil)
+	ds := BuildDiagrams(doc)
 	if ds.Chunked {
 		t.Fatal("3 modules should be a single diagram")
 	}
