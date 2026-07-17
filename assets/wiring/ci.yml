@@ -15,5 +15,7 @@ jobs:
           go-version: "1.24"
       - name: Install pinned harness
         run: go install github.com/olesho/harness/cmd/harness@$(cat .harness-version)
+      - name: Install pinned analyzers
+        run: harness install-tools
       - name: harness ci
         run: harness ci

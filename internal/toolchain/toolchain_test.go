@@ -2,6 +2,7 @@ package toolchain
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/olesho/harness/internal/lockfile"
@@ -74,5 +75,95 @@ func TestJSONDeterministicAndValid(t *testing.T) {
 func TestJSONUnknownLanguage(t *testing.T) {
 	if _, err := JSON("cobol"); err == nil {
 		t.Fatal("expected error for unknown language")
+	}
+}
+
+func TestAllPhasesGoOnlyVerifiers(t *testing.T) {
+	has := func(phs []Phase, p Phase) bool {
+		for _, x := range phs {
+			if x == p {
+				return true
+			}
+		}
+		return false
+	}
+	goPhases := AllPhases(lockfile.LangGo)
+	for _, p := range goVerifierPhases {
+		if !has(goPhases, p) {
+			t.Errorf("AllPhases(go) missing verifier phase %q", p)
+		}
+		if len(Commands(lockfile.LangGo, p)) == 0 {
+			t.Errorf("go verifier phase %q has no commands", p)
+		}
+	}
+	// Other languages must not carry the Go-only verifier phases.
+	for _, lang := range []string{lockfile.LangPython, lockfile.LangTS} {
+		for _, p := range goVerifierPhases {
+			if has(AllPhases(lang), p) {
+				t.Errorf("AllPhases(%s) unexpectedly includes %q", lang, p)
+			}
+			if len(Commands(lang, p)) != 0 {
+				t.Errorf("%s should have no commands for verifier phase %q", lang, p)
+			}
+		}
+	}
+}
+
+func TestFormatPhaseGatesFormatters(t *testing.T) {
+	// gci/gofumpt in the Go format phase must be gated by their feature; gofmt
+	// runs unconditionally, and gofumpt is last so the result is idempotent.
+	cmds := Commands(lockfile.LangGo, PhaseFormat)
+	gates := map[string]string{}
+	order := []string{}
+	for _, c := range cmds {
+		order = append(order, c.Argv[0])
+		gates[c.Argv[0]] = c.Gate
+	}
+	if gates["gofmt"] != "" {
+		t.Errorf("gofmt must be ungated, got gate %q", gates["gofmt"])
+	}
+	if gates["gci"] != "gci" {
+		t.Errorf("gci write must be gated on gci, got %q", gates["gci"])
+	}
+	if gates["gofumpt"] != "gofumpt" {
+		t.Errorf("gofumpt -w must be gated on gofumpt, got %q", gates["gofumpt"])
+	}
+	if len(order) < 3 || order[len(order)-1] != "gofumpt" {
+		t.Errorf("gofumpt must be the last format command, order=%v", order)
+	}
+}
+
+func TestGoAnalyzersHaveModuleAndFeature(t *testing.T) {
+	want := map[string]string{"golangci-lint": "lint", "gofumpt": "gofumpt", "gci": "gci"}
+	got := map[string]bool{}
+	for _, a := range Analyzers(lockfile.LangGo) {
+		if a.Module == "" {
+			t.Errorf("analyzer %q missing Module", a.Name)
+		}
+		if a.Version == "" {
+			t.Errorf("analyzer %q missing Version", a.Name)
+		}
+		if want[a.Name] != a.Feature {
+			t.Errorf("analyzer %q feature = %q, want %q", a.Name, a.Feature, want[a.Name])
+		}
+		got[a.Name] = true
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("missing analyzer %q", name)
+		}
+	}
+}
+
+func TestJSONIncludesGateAndVerifierPhases(t *testing.T) {
+	b, err := JSON(lockfile.LangGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{`"gofumpt"`, `"gci"`, `"mod_tidy"`, `"coverage"`, `"gate"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("go toolchain JSON missing %s:\n%s", want, s)
+		}
 	}
 }

@@ -1,9 +1,11 @@
 package setup
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/olesho/harness/internal/lockfile"
@@ -130,6 +132,106 @@ func TestInitRefusesNonEmpty(t *testing.T) {
 	// With adopt it proceeds.
 	if _, err := Init(root, goSingleInput(nil), Options{NoGit: true, Adopt: true}); err != nil {
 		t.Fatalf("adopt should proceed: %v", err)
+	}
+}
+
+func TestFullPresetVerifiersAreGoOnly(t *testing.T) {
+	in := &Input{
+		Layout: lockfile.LayoutMonorepo,
+		Preset: PresetFull,
+		Projects: []ProjectInput{
+			{Name: "api", Language: lockfile.LangGo, ModulePath: "example.com/api"},
+			{Name: "worker", Language: lockfile.LangPython},
+		},
+	}
+	lock, err := Resolve(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goFeat := lock.Projects[0].Features
+	if !goFeat.Gofumpt || !goFeat.Gci || !goFeat.ModTidy || !goFeat.Coverage {
+		t.Errorf("full preset should enable all Go verifiers, got %+v", goFeat)
+	}
+	if lock.Projects[0].CoverageMin != 0 {
+		t.Errorf("full preset coverageMin should default to 0, got %d", lock.Projects[0].CoverageMin)
+	}
+	py := lock.Projects[1].Features
+	if py.Gofumpt || py.Gci || py.ModTidy || py.Coverage {
+		t.Errorf("python project must not receive Go verifiers, got %+v", py)
+	}
+}
+
+func TestResolveCoverageMinFromConfig(t *testing.T) {
+	min := 80
+	in := &Input{
+		Layout: lockfile.LayoutSingle,
+		Projects: []ProjectInput{{
+			Name: "app", Language: lockfile.LangGo, ModulePath: "example.com/app",
+			Features:    &FeaturesInput{Coverage: boolp(true)},
+			CoverageMin: &min,
+		}},
+	}
+	lock, err := Resolve(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lock.Projects[0].Features.Coverage || lock.Projects[0].CoverageMin != 80 {
+		t.Fatalf("coverageMin not applied from config: %+v / %d",
+			lock.Projects[0].Features, lock.Projects[0].CoverageMin)
+	}
+}
+
+func TestEditVerifiersRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root, goSingleInput(nil), Options{NoGit: true}); err != nil {
+		t.Fatal(err)
+	}
+	min := 80
+	if _, err := Edit(root, "myproj", "myproj", EditInput{
+		Features:    FeaturesInput{Gofumpt: boolp(true), Coverage: boolp(true)},
+		CoverageMin: &min,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lock.Projects[0].Features.Gofumpt || !lock.Projects[0].Features.Coverage || lock.Projects[0].CoverageMin != 80 {
+		t.Fatalf("edit did not persist verifiers: %+v / %d", lock.Projects[0].Features, lock.Projects[0].CoverageMin)
+	}
+
+	// Turning coverage off without --coverage-min leaves the stored threshold.
+	if _, err := Edit(root, "myproj", "myproj", EditInput{
+		Features: FeaturesInput{Coverage: boolp(false)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lock, _ = lockfile.Load(root)
+	if lock.Projects[0].Features.Coverage {
+		t.Error("coverage should be off after edit")
+	}
+	if lock.Projects[0].CoverageMin != 80 {
+		t.Errorf("omitted --coverage-min should leave coverageMin unchanged, got %d", lock.Projects[0].CoverageMin)
+	}
+}
+
+func TestBootstrapReportsAnalyzers(t *testing.T) {
+	root := t.TempDir()
+	// Standard preset enables lint → golangci-lint is a required analyzer.
+	if _, err := Init(root, goSingleInput(nil), Options{NoGit: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Bootstrap must stay offline (it must not compile analyzers): an empty,
+	// isolated cache should not cause a failure — only a reminder to install.
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	var out bytes.Buffer
+	if err := Bootstrap(root, &out); err != nil {
+		t.Fatalf("bootstrap should not install analyzers or fail: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "install-tools") {
+		t.Errorf("bootstrap should remind to run install-tools, got:\n%s", out.String())
 	}
 }
 

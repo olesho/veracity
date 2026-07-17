@@ -71,7 +71,7 @@ func TestPostEditBlocksOnBadFormat(t *testing.T) {
 			if code != 2 {
 				t.Fatalf("expected exit 2, got %d; stderr=%s", code, stderr.String())
 			}
-			if !strings.Contains(stderr.String(), "lint failed") {
+			if !strings.Contains(stderr.String(), "checks failed") {
 				t.Fatalf("expected feedback on stderr, got %q", stderr.String())
 			}
 		})

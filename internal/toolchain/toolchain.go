@@ -36,27 +36,56 @@ const (
 	PhaseFileLint    Phase = "file_lint"    // fast per-file checks (tier 1 post-edit)
 	PhaseProjectLint Phase = "project_lint" // full bundle (tiers 2-4)
 	PhaseTest        Phase = "test"         // the verifier
+	// Go-only quality-verifier phases (each gated by its own per-project feature;
+	// not part of the global lifecycle invariant below).
+	PhaseGofumpt  Phase = "gofumpt"  // gofumpt -l (stricter format check)
+	PhaseGci      Phase = "gci"      // gci list (import ordering check)
+	PhaseModTidy  Phase = "mod_tidy" // go mod tidy -diff (module hygiene)
+	PhaseCoverage Phase = "coverage" // go test -coverprofile → threshold gate
 )
 
-// Phases is the canonical phase order.
+// Phases is the canonical, language-independent lifecycle order that every
+// language must implement (see TestEveryLanguageHasEveryPhase). Language-specific
+// verifier phases are declared per language and surfaced via AllPhases.
 var Phases = []Phase{PhaseFormat, PhaseFileLint, PhaseProjectLint, PhaseTest}
+
+// goVerifierPhases are the optional Go-only verifier phases, appended after the
+// global lifecycle phases for the Go machine interface and phase iteration.
+var goVerifierPhases = []Phase{PhaseGofumpt, PhaseGci, PhaseModTidy, PhaseCoverage}
+
+// AllPhases returns the global lifecycle phases plus any language-specific
+// verifier phases, in deterministic order.
+func AllPhases(lang string) []Phase {
+	out := append([]Phase{}, Phases...)
+	if lang == lockfile.LangGo {
+		out = append(out, goVerifierPhases...)
+	}
+	return out
+}
 
 // Command is one invocation. Argv is the base command; the executor sets cwd to
 // the resolved project root and, for AppendFiles, appends the file list.
 type Command struct {
 	Argv         []string
 	Files        FilesMode
-	FailOnStdout bool // nonempty stdout means failure (gofmt -l always exits 0)
+	FailOnStdout bool   // nonempty stdout means failure (gofmt -l always exits 0)
+	Gate         string // "" = always; else the feature JSON key that must be enabled
 }
 
-// Analyzer is an external tool not pinned by a project's own lockfile, acquired
-// and version-pinned by the harness (checksum-verified cache).
+// Analyzer is an external tool not declared in a project's own go.mod, acquired
+// and version-pinned by the harness. `harness install-tools` (internal/analyzers)
+// `go install`s Module@vVersion — source integrity comes from the Go module
+// checksum database — into a per-version cache, and records the produced binary's
+// sha256 so the runner can detect a corrupted/tampered cache before executing the
+// resolved absolute path. Checksums holds upstream release-binary digests keyed by
+// GOOS/GOARCH; it is reserved for a future release-binary download path and is
+// empty today (dev builds may fall back to a version-verified PATH binary only
+// when HARNESS_ANALYZERS_DEV=1).
 type Analyzer struct {
-	Name    string
-	Version string
-	// Checksums maps GOOS/GOARCH (e.g. "darwin/arm64") to a sha256 hex digest.
-	// Populated at release time; empty in dev builds (verification is skipped
-	// and a matching PATH binary may be used instead).
+	Name      string
+	Module    string // go-install path, e.g. "mvdan.cc/gofumpt"
+	Version   string // pinned version without the leading "v", e.g. "0.8.0"
+	Feature   string // the feature JSON key that requires it ("lint" for golangci-lint)
 	Checksums map[string]string
 }
 
@@ -69,10 +98,23 @@ func cmd(files FilesMode, failOnStdout bool, argv ...string) Command {
 	return Command{Argv: argv, Files: files, FailOnStdout: failOnStdout}
 }
 
+// gate returns a copy of c that only runs when the named feature is enabled.
+func (c Command) gate(feature string) Command { c.Gate = feature; return c }
+
+// CoverProfilePlaceholder is substituted with an exclusive temp profile path by
+// runner.Coverage before executing the coverage command.
+const CoverProfilePlaceholder = "$COVERPROFILE"
+
 var specs = map[string]langSpec{
 	lockfile.LangGo: {
 		phases: map[Phase][]Command{
-			PhaseFormat:   {cmd(AppendFiles, false, "gofmt", "-w")},
+			// Format order gofmt → gci → gofumpt: gofumpt (strictest) runs last so
+			// the result is idempotent. gci and gofumpt only apply when enabled.
+			PhaseFormat: {
+				cmd(AppendFiles, false, "gofmt", "-w"),
+				cmd(AppendFiles, false, "gci", "write").gate("gci"),
+				cmd(AppendFiles, false, "gofumpt", "-w").gate("gofumpt"),
+			},
 			PhaseFileLint: {cmd(AppendFiles, true, "gofmt", "-l")},
 			PhaseProjectLint: {
 				cmd(AppendFiles, true, "gofmt", "-l"),
@@ -80,8 +122,19 @@ var specs = map[string]langSpec{
 				cmd(NoFiles, false, "golangci-lint", "run", "./..."),
 			},
 			PhaseTest: {cmd(NoFiles, false, "go", "test", "./...")},
+			// Go-only verifier phases (gated by their own features in the runner).
+			PhaseGofumpt: {cmd(AppendFiles, true, "gofumpt", "-l")},
+			PhaseGci:     {cmd(AppendFiles, true, "gci", "list")},
+			PhaseModTidy: {cmd(NoFiles, false, "go", "mod", "tidy", "-diff")},
+			// Consumed only by runner.Coverage, which substitutes the placeholder
+			// with an exclusive temp profile and computes the percentage itself.
+			PhaseCoverage: {cmd(NoFiles, false, "go", "test", "-coverprofile="+CoverProfilePlaceholder, "-covermode=atomic", "./...")},
 		},
-		analyzers: []Analyzer{{Name: "golangci-lint", Version: "2.12.2"}},
+		analyzers: []Analyzer{
+			{Name: "golangci-lint", Module: "github.com/golangci/golangci-lint/v2/cmd/golangci-lint", Version: "2.12.2", Feature: "lint"},
+			{Name: "gofumpt", Module: "mvdan.cc/gofumpt", Version: "0.10.0", Feature: "gofumpt"},
+			{Name: "gci", Module: "github.com/daixiang0/gci", Version: "0.14.0", Feature: "gci"},
+		},
 	},
 	lockfile.LangPython: {
 		// Run from the project root; `uv run` resolves the project's frozen env.
@@ -158,6 +211,7 @@ type commandJSON struct {
 	Argv         []string `json:"argv"`
 	Files        string   `json:"files"`
 	FailOnStdout bool     `json:"failOnStdout"`
+	Gate         string   `json:"gate,omitempty"`
 }
 
 type langJSON struct {
@@ -178,11 +232,11 @@ func JSON(lang string) ([]byte, error) {
 	if view.Analyzers == nil {
 		view.Analyzers = []Analyzer{}
 	}
-	for _, ph := range Phases {
+	for _, ph := range AllPhases(lang) {
 		cmds := spec.phases[ph]
 		list := make([]commandJSON, 0, len(cmds))
 		for _, c := range cmds {
-			list = append(list, commandJSON{Argv: c.Argv, Files: string(c.Files), FailOnStdout: c.FailOnStdout})
+			list = append(list, commandJSON{Argv: c.Argv, Files: string(c.Files), FailOnStdout: c.FailOnStdout, Gate: c.Gate})
 		}
 		view.Phases[string(ph)] = list
 	}

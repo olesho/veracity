@@ -6,11 +6,11 @@ package integration
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/olesho/harness/internal/analyzers"
 	"github.com/olesho/harness/internal/cli"
 )
 
@@ -33,6 +33,10 @@ func mustExist(t *testing.T, root string, rels ...string) {
 func TestSingleGoFullFlow(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
+	// Isolate the analyzer cache (never touch the user's real cache) and allow the
+	// version-verified PATH fallback so lint can run offline without compiling.
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("HARNESS_ANALYZERS_DEV", "1")
 
 	cfg := `{"layout":"single","preset":"standard","capabilities":{"agents":["claude"],"gitHooks":true,"skills":true},` +
 		`"projects":[{"name":"demo","language":"go","modulePath":"example.com/demo",` +
@@ -57,13 +61,14 @@ func TestSingleGoFullFlow(t *testing.T) {
 		t.Fatalf("verify failed (%d): %s%s", code, o, e)
 	}
 
-	// Lint depends on golangci-lint; skip that assertion if it isn't installed.
-	if _, err := exec.LookPath("golangci-lint"); err == nil {
+	// Lint depends on golangci-lint resolving (dev-mode PATH fallback here); skip
+	// the assertion when it isn't resolvable at the pinned version.
+	if _, err := analyzers.Resolve("go", "golangci-lint"); err == nil {
 		if code, o, e := run(t, "", "lint"); code != 0 {
 			t.Fatalf("lint failed (%d): %s%s", code, o, e)
 		}
 	} else {
-		t.Log("golangci-lint not on PATH; skipping lint assertion")
+		t.Logf("golangci-lint not resolvable (%v); skipping lint assertion", err)
 	}
 
 	if code, o, e := run(t, "", "test"); code != 0 {

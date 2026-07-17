@@ -105,6 +105,8 @@ afterward without re-running setup:
 # per-project features (name first, then flags; --confirm guards the change)
 harness edit myapp --confirm myapp --diagrams on      # enabling diagrams also enables markdown
 harness edit myapp --confirm myapp --lint off --test off
+harness edit myapp --confirm myapp --gofumpt on --gci on --mod-tidy on   # Go quality verifiers
+harness edit myapp --confirm myapp --coverage on --coverage-min 80       # fail below 80% coverage
 
 # repo-level capabilities (no name; add/remove wiring, CI, skills, agents)
 harness reconfigure --ci on --agent-docs on           # creates ci.yml, CLAUDE.md, ...
@@ -121,6 +123,47 @@ harness reconfigure --codex on                        # add Codex hook wiring al
   it writes a `<file>.harness-new` beside it and tells you.
 - `language` and `modulePath` are immutable; changing them means removing and
   re-adding the project.
+
+## Go quality verifiers (optional)
+
+Beyond `lint`/`test`, Go projects have four independent, off-by-default quality
+verifiers (all on under the `full` preset). The fast formatters **gofumpt** and
+**gci** also run in the agent edit-loop (post-edit/stop hooks) so an AI agent gets
+blocked-with-feedback and self-corrects each turn — `harness fmt` auto-fixes both.
+The heavier **modTidy** and **coverage** checks run at the git **pre-push** hook
+and in **`harness ci`**. They are Go-only — `harness setup`/`edit` reject them on
+Python/TypeScript projects. Enforcement by tier:
+
+| Tier | Runs |
+|---|---|
+| agent post-edit / stop | `gofmt` + (enabled) `gofumpt`, `gci` on changed files |
+| git pre-commit | lint (`golangci-lint`, `go vet`, `gofmt`) |
+| git pre-push | `go test` + (enabled) `gofumpt`, `gci`, `modTidy`, `coverage` |
+| `harness ci` | verify + lint + test + all enabled verifiers |
+
+| Feature | What it checks | `edit` flag |
+|---|---|---|
+| `gofumpt` | stricter formatting (superset of gofmt) | `--gofumpt on\|off` |
+| `gci` | deterministic import section ordering | `--gci on\|off` |
+| `modTidy` | `go.mod`/`go.sum` are tidy (`go mod tidy -diff`) | `--mod-tidy on\|off` |
+| `coverage` | total statement coverage ≥ `coverageMin` | `--coverage on\|off`, `--coverage-min N` |
+
+`coverageMin` is a per-project percent set at setup time (`"coverageMin": 80` in
+the project entry) or later via `--coverage-min N`; `0` (the default) measures and
+reports coverage but never fails.
+
+These tools are **harness-managed analyzers**: pinned versions installed by
+`harness install-tools` into a per-version cache under your user cache dir,
+resolved by verified absolute path (sha256-checked). CI runs `install-tools`; run
+it once locally too (`harness bootstrap` reminds you). `harness doctor` reports
+each analyzer's cache status. If an enabled verifier's tool is missing, the gate
+**fails** with a `run: harness install-tools` hint rather than silently skipping.
+(`HARNESS_ANALYZERS_DEV=1` allows a version-verified PATH binary for local
+development.)
+
+**Roadmap:** a security/supply-chain group — `gosec`, `govulncheck`,
+`osv-scanner`, and `syft`/`grype` (SBOM) — is planned as the same kind of Go-only
+toggles; it is not implemented yet.
 
 ## Concepts
 

@@ -2,8 +2,10 @@ package runner
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/olesho/harness/internal/lockfile"
@@ -81,5 +83,148 @@ func TestDisabledFeaturesAreNoOps(t *testing.T) {
 	}
 	if err := Test(root, lock, lock.Projects[0], &out); err != nil {
 		t.Fatalf("disabled test should no-op: %v", err)
+	}
+}
+
+func TestVerifierWrappersNoticeWhenDisabled(t *testing.T) {
+	root := t.TempDir()
+	lock := goLock() // verifiers all off
+	for _, fn := range []func(string, *lockfile.Lock, lockfile.Project, io.Writer) error{
+		Gofumpt, Gci, ModTidy, Coverage,
+	} {
+		var out bytes.Buffer
+		if err := fn(root, lock, lock.Projects[0], &out); err != nil {
+			t.Errorf("disabled verifier should no-op: %v", err)
+		}
+		if !strings.Contains(out.String(), "disabled") {
+			t.Errorf("expected a disabled NOTICE, got %q", out.String())
+		}
+	}
+}
+
+func TestFormatGateSkipsDisabledFormatters(t *testing.T) {
+	// gci/gofumpt are gated off, so PhaseFormat runs only gofmt and never tries
+	// to resolve the (uninstalled) analyzers. A well-formatted file passes.
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir()) // empty cache: resolution would fail
+	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	root := t.TempDir()
+	lock := goLock() // gofumpt/gci off
+	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
+	writeFile(t, root, "good.go", "package app\n\nfunc Good() {}\n")
+	var out bytes.Buffer
+	if err := Format(root, lock, lock.Projects[0], &out); err != nil {
+		t.Fatalf("format with gated-off formatters should pass: %v\n%s", err, out.String())
+	}
+}
+
+func TestEnabledVerifierHardFailsWhenToolMissing(t *testing.T) {
+	// gofumpt enabled but not in the (empty) cache and no dev PATH fallback →
+	// hard fail with an install hint, never a silent skip.
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	root := t.TempDir()
+	lock := goLock()
+	lock.Projects[0].Features.Gofumpt = true
+	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
+	writeFile(t, root, "good.go", "package app\n\nfunc Good() {}\n")
+	var out bytes.Buffer
+	err := Gofumpt(root, lock, lock.Projects[0], &out)
+	if err == nil {
+		t.Fatalf("enabled gofumpt with no tool must fail; output:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "install-tools") {
+		t.Errorf("failure should hint at install-tools, got %q", out.String())
+	}
+}
+
+func TestFileChecksWiresFormatters(t *testing.T) {
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir()) // empty cache → resolution would fail
+	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	root := t.TempDir()
+	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
+	writeFile(t, root, "good.go", "package app\n\nfunc Good() {}\n")
+
+	// Formatters off → only gofmt runs; a clean file passes with no tool needed.
+	lock := goLock()
+	var out bytes.Buffer
+	if err := FileChecks(root, lock, lock.Projects[0], []string{"good.go"}, &out); err != nil {
+		t.Fatalf("FileChecks with formatters off should pass: %v\n%s", err, out.String())
+	}
+
+	// gofumpt on → FileChecks tries to resolve it and hard-fails (not installed),
+	// proving gofumpt is part of the fast agent-loop path.
+	lock.Projects[0].Features.Gofumpt = true
+	out.Reset()
+	if err := FileChecks(root, lock, lock.Projects[0], []string{"good.go"}, &out); err == nil {
+		t.Fatalf("FileChecks should run gofumpt when enabled; output:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "install-tools") {
+		t.Errorf("expected an install-tools hint, got %q", out.String())
+	}
+}
+
+func TestParseCoverProfile(t *testing.T) {
+	// Non-integer coverage must be preserved as a decimal (not rounded).
+	pct, hasData, err := parseCoverProfile(writeProfile(t,
+		"mode: atomic\nx.go:1.1,2.1 2 1\nx.go:3.1,4.1 1 0\n")) // 2 of 3 covered
+	if err != nil || !hasData {
+		t.Fatalf("parse: pct=%v hasData=%v err=%v", pct, hasData, err)
+	}
+	if pct < 66.6 || pct > 66.7 {
+		t.Errorf("expected ~66.67%%, got %v (rounding bug?)", pct)
+	}
+
+	// mode-only profile → no data.
+	if _, hasData, err := parseCoverProfile(writeProfile(t, "mode: atomic\n")); err != nil || hasData {
+		t.Fatalf("empty profile: hasData=%v err=%v", hasData, err)
+	}
+
+	// malformed → error.
+	if _, _, err := parseCoverProfile(writeProfile(t, "mode: atomic\ngarbage line here\n")); err == nil {
+		t.Fatal("malformed profile line should error")
+	}
+}
+
+func writeProfile(t *testing.T, content string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "cover.out")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestCoverageGate(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
+	// Two functions, one statement each; the test covers only one → 50%.
+	writeFile(t, root, "m.go", "package app\n\nfunc Covered() int { return 1 }\n\nfunc Uncovered() int { return 2 }\n")
+	writeFile(t, root, "m_test.go", "package app\n\nimport \"testing\"\n\nfunc TestCovered(t *testing.T) {\n\tif Covered() != 1 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
+
+	lock := goLock()
+	lock.Projects[0].Features.Coverage = true
+
+	// Below threshold → fail.
+	lock.Projects[0].CoverageMin = 80
+	var out bytes.Buffer
+	if err := Coverage(root, lock, lock.Projects[0], &out); err == nil {
+		t.Fatalf("50%% coverage should fail an 80%% gate; output:\n%s", out.String())
+	}
+
+	// At/below actual → pass, and the measured total is printed.
+	lock.Projects[0].CoverageMin = 40
+	out.Reset()
+	if err := Coverage(root, lock, lock.Projects[0], &out); err != nil {
+		t.Fatalf("50%% coverage should pass a 40%% gate: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "50.0%") {
+		t.Errorf("expected the measured 50.0%% to be printed, got %q", out.String())
+	}
+
+	// Report-only (0) always passes.
+	lock.Projects[0].CoverageMin = 0
+	out.Reset()
+	if err := Coverage(root, lock, lock.Projects[0], &out); err != nil {
+		t.Fatalf("report-only coverage should pass: %v\n%s", err, out.String())
 	}
 }

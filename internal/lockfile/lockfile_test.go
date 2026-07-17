@@ -3,6 +3,7 @@ package lockfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -90,6 +91,90 @@ func TestValidateInvariants(t *testing.T) {
 		Projects: []Project{{Name: "p", Language: LangPython, ModulePath: "x/y"}}}
 	if err := l.Validate(); err == nil {
 		t.Fatal("expected modulePath-on-python to fail validation")
+	}
+}
+
+func TestValidateGoOnlyVerifiers(t *testing.T) {
+	// Each Go-only verifier flag on a python project must fail.
+	for _, mut := range []func(*Features){
+		func(f *Features) { f.Gofumpt = true },
+		func(f *Features) { f.Gci = true },
+		func(f *Features) { f.ModTidy = true },
+		func(f *Features) { f.Coverage = true },
+	} {
+		l := &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
+			Projects: []Project{{Name: "p", Language: LangPython}}}
+		mut(&l.Projects[0].Features)
+		if err := l.Validate(); err == nil {
+			t.Errorf("expected go-only verifier on python to fail: %+v", l.Projects[0].Features)
+		}
+	}
+
+	// coverageMin on python must fail.
+	l := &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
+		Projects: []Project{{Name: "p", Language: LangPython, CoverageMin: 50}}}
+	if err := l.Validate(); err == nil {
+		t.Fatal("expected coverageMin on python to fail validation")
+	}
+
+	// coverageMin out of range on go must fail.
+	for _, v := range []int{-1, 101} {
+		l := validLock()
+		l.Projects[0].Features.Coverage = true
+		l.Projects[0].CoverageMin = v
+		if err := l.Validate(); err == nil {
+			t.Errorf("expected coverageMin %d to fail validation", v)
+		}
+	}
+
+	// Valid Go project with all verifiers on and a bounded coverageMin passes.
+	l = validLock()
+	l.Projects[0].Features.Gofumpt = true
+	l.Projects[0].Features.Gci = true
+	l.Projects[0].Features.ModTidy = true
+	l.Projects[0].Features.Coverage = true
+	l.Projects[0].CoverageMin = 80
+	if err := l.Validate(); err != nil {
+		t.Fatalf("valid go verifiers rejected: %v", err)
+	}
+}
+
+func TestFeaturesEnabled(t *testing.T) {
+	f := Features{Lint: true, Gofumpt: true, Coverage: true}
+	cases := map[string]bool{
+		"lint": true, "test": false, "markdown": false, "diagrams": false,
+		"gofumpt": true, "gci": false, "modTidy": false, "coverage": true,
+		"unknown": false,
+	}
+	for name, want := range cases {
+		if got := f.Enabled(name); got != want {
+			t.Errorf("Enabled(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+func TestMarshalOmitsUnsetVerifiers(t *testing.T) {
+	// A standard Go lock (verifiers off) must not carry the Go-only keys, so
+	// existing/default locks stay byte-identical to pre-verifier locks.
+	b, err := Marshal(validLock())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"gofumpt", "gci", "modTidy", "coverage", "coverageMin"} {
+		if strings.Contains(string(b), key) {
+			t.Errorf("unset verifier key %q should be omitted, got:\n%s", key, b)
+		}
+	}
+	// When on, they appear.
+	l := validLock()
+	l.Projects[0].Features.Gofumpt = true
+	l.Projects[0].Features.Coverage = true
+	l.Projects[0].CoverageMin = 80
+	b, _ = Marshal(l)
+	for _, key := range []string{"gofumpt", "coverage", "coverageMin"} {
+		if !strings.Contains(string(b), key) {
+			t.Errorf("enabled key %q should be present, got:\n%s", key, b)
+		}
 	}
 }
 

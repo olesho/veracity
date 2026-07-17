@@ -28,10 +28,11 @@ type CapsInput struct {
 
 // ProjectInput describes one project to scaffold.
 type ProjectInput struct {
-	Name       string         `json:"name"`
-	Language   string         `json:"language"`
-	ModulePath string         `json:"modulePath,omitempty"`
-	Features   *FeaturesInput `json:"features,omitempty"`
+	Name        string         `json:"name"`
+	Language    string         `json:"language"`
+	ModulePath  string         `json:"modulePath,omitempty"`
+	Features    *FeaturesInput `json:"features,omitempty"`
+	CoverageMin *int           `json:"coverageMin,omitempty"` // Go only; nil = preset default
 }
 
 // FeaturesInput mirrors lockfile.Features with optional (pointer) fields.
@@ -40,6 +41,11 @@ type FeaturesInput struct {
 	Test     *bool `json:"test,omitempty"`
 	Markdown *bool `json:"markdown,omitempty"`
 	Diagrams *bool `json:"diagrams,omitempty"`
+	// Go-only quality verifiers.
+	Gofumpt  *bool `json:"gofumpt,omitempty"`
+	Gci      *bool `json:"gci,omitempty"`
+	ModTidy  *bool `json:"modTidy,omitempty"`
+	Coverage *bool `json:"coverage,omitempty"`
 }
 
 // Presets.
@@ -50,24 +56,38 @@ const (
 )
 
 type presetDefaults struct {
+	name     string
 	caps     lockfile.Capabilities
 	features lockfile.Features
+}
+
+// goFeatureDefaults returns the Go-only verifier defaults for this preset. They
+// are applied only to Go projects (see resolveProject); other languages never
+// receive them.
+func (d presetDefaults) goFeatureDefaults() lockfile.Features {
+	if d.name == PresetFull {
+		return lockfile.Features{Gofumpt: true, Gci: true, ModTidy: true, Coverage: true}
+	}
+	return lockfile.Features{}
 }
 
 func presetFor(name string) (presetDefaults, error) {
 	switch name {
 	case "", PresetStandard:
 		return presetDefaults{
+			name:     PresetStandard,
 			caps:     lockfile.Capabilities{Agents: []string{}, GitHooks: true},
 			features: lockfile.Features{Lint: true, Test: true},
 		}, nil
 	case PresetMinimal:
 		return presetDefaults{
+			name:     PresetMinimal,
 			caps:     lockfile.Capabilities{Agents: []string{}},
 			features: lockfile.Features{Lint: true},
 		}, nil
 	case PresetFull:
 		return presetDefaults{
+			name:     PresetFull,
 			caps:     lockfile.Capabilities{Agents: []string{lockfile.AgentClaude, lockfile.AgentCodex}, GitHooks: true, CI: true, AgentDocs: true, Skills: true},
 			features: lockfile.Features{Lint: true, Test: true, Markdown: true},
 		}, nil
@@ -131,31 +151,9 @@ func Resolve(in *Input) (*lockfile.Lock, error) {
 
 	var projects []lockfile.Project
 	for _, p := range in.Projects {
-		feat := def.features
-		if f := p.Features; f != nil {
-			if f.Lint != nil {
-				feat.Lint = *f.Lint
-			}
-			if f.Test != nil {
-				feat.Test = *f.Test
-			}
-			if f.Markdown != nil {
-				feat.Markdown = *f.Markdown
-			}
-			if f.Diagrams != nil {
-				feat.Diagrams = *f.Diagrams
-			}
-		}
-		// Invariant: diagrams require markdown.
-		if feat.Diagrams {
-			feat.Markdown = true
-		}
-		proj := lockfile.Project{Name: p.Name, Language: p.Language, Features: feat}
-		if p.Language == lockfile.LangGo {
-			proj.ModulePath = p.ModulePath
-			if proj.ModulePath == "" {
-				proj.ModulePath = "example.com/" + p.Name
-			}
+		proj, err := resolveProject(p, def)
+		if err != nil {
+			return nil, err
 		}
 		projects = append(projects, proj)
 	}

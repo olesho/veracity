@@ -29,6 +29,16 @@ does all file writing. Never hand-write project files yourself.
      ask (default `example.com/<name>`) for a brand-new project.
    - **Features** per project: `lint`, `test`, `markdown` docs, `diagrams`
      (enabling diagrams enables markdown automatically).
+   - **Go-only quality verifiers** (ask only for `go` projects; all off by
+     default, all on under the `full` preset): `gofumpt` (stricter formatting),
+     `gci` (import ordering), `modTidy` (`go mod tidy` hygiene), and `coverage`
+     (a total-coverage gate). **If they enable `coverage`, ask for the minimum
+     coverage percent** — "minimum coverage % (blank = report only)" — and put it
+     in the project entry as `"coverageMin": <N>` (omit or `0` = measure and
+     report, never fail). gofumpt/gci also run in the agent edit-loop (post-edit/
+     stop hooks) so the agent auto-fixes formatting each turn via `harness fmt`;
+     modTidy/coverage run at git pre-push and in `harness ci`. Do **not** offer
+     them for python/typescript.
    - **Capabilities** (repo-level): which agents to wire (`claude`, `codex`, or
      none), and whether to enable `gitHooks`, `ci`, `agentDocs`, `skills`.
    - Offer the presets as shortcuts: **minimal**, **standard** (default), **full**.
@@ -45,10 +55,14 @@ does all file writing. Never hand-write project files yourself.
    sample module). If the user wants their own module path in an empty dir, run
    `go mod init <path>` first, then use `--adopt`.
 
-5. **Bootstrap and verify.** Run `harness bootstrap` (installs git-hook delegates,
-   dependencies, and renders the initial docs), then `harness verify`, then
-   `harness lint` and `harness test`. Relay results. If `harness lint` flags
-   pre-existing formatting, run `harness fmt` (or `gofmt -w`) and re-lint.
+5. **Bootstrap, provision tools, verify.** Run `harness bootstrap` (installs
+   git-hook delegates and dependencies, renders the initial docs, and — if any
+   analyzers are needed — reminds you to install them). Then run
+   `harness install-tools` to install the pinned analyzers (golangci-lint, and
+   gofumpt/gci if their verifiers are on) into the harness cache; the git hooks
+   and CI need them. Then `harness verify`, `harness lint`, and `harness test`.
+   Relay results. If `harness lint` flags pre-existing formatting, run
+   `harness fmt` (or `gofmt -w`) and re-lint.
 
 6. **Populate diagram prose (if diagrams enabled).** `harness` never calls an
    LLM — you write the prose. Do it inline (the project-local harness-docs skill

@@ -19,8 +19,13 @@ import (
 // FileName is the committed lock file at the managed repo root.
 const FileName = "harness.lock.json"
 
-// SchemaVersion is the current lock schema. `harness migrate` bumps a project
-// forward when this changes.
+// SchemaVersion is the current lock schema. New optional fields are additive
+// (omitempty; absent keys decode to zero on a newer binary), so they do not bump
+// the version. Forward compatibility is provided by the `.harness-version` binary
+// pin — a managed repo always runs its pinned harness — so an older binary reading
+// a newer lock (which DisallowUnknownFields rejects) is out of the compatibility
+// contract; the fix is to update harness. `harness migrate` bumps a project
+// forward when a breaking schema change does require a version bump.
 const SchemaVersion = 1
 
 // Layout selects the repo shape.
@@ -70,14 +75,54 @@ type Project struct {
 	Language   string   `json:"language"`
 	ModulePath string   `json:"modulePath,omitempty"` // Go only
 	Features   Features `json:"features"`
+	// CoverageMin is the minimum total test coverage percent the coverage gate
+	// enforces (Go only; 0 = measure-and-report, never fail). Inert unless
+	// Features.Coverage is set.
+	CoverageMin int `json:"coverageMin,omitempty"`
 }
 
-// Features are per-project opt-ins.
+// Features are per-project opt-ins. The universal four (lint/test/markdown/
+// diagrams) are always serialized; the Go-only verifier flags use omitempty so
+// non-Go and default locks stay byte-identical to pre-verifier locks.
 type Features struct {
 	Lint     bool `json:"lint"`
 	Test     bool `json:"test"`
 	Markdown bool `json:"markdown"`
 	Diagrams bool `json:"diagrams"`
+	// Go-only quality verifiers (independent per-project toggles).
+	Gofumpt  bool `json:"gofumpt,omitempty"`  // stricter formatter (superset of gofmt)
+	Gci      bool `json:"gci,omitempty"`      // deterministic import section ordering
+	ModTidy  bool `json:"modTidy,omitempty"`  // `go mod tidy -diff` hygiene check
+	Coverage bool `json:"coverage,omitempty"` // total-coverage gate (see Project.CoverageMin)
+}
+
+// goOnlyFeatures lists the feature JSON keys that are only valid for Go
+// projects, used by Enabled and by Validate's language guard.
+var goOnlyFeatures = []string{"gofumpt", "gci", "modTidy", "coverage"}
+
+// Enabled reports whether the named feature (by its JSON key) is on. It powers
+// the per-command Gate filter in the runner.
+func (f Features) Enabled(name string) bool {
+	switch name {
+	case "lint":
+		return f.Lint
+	case "test":
+		return f.Test
+	case "markdown":
+		return f.Markdown
+	case "diagrams":
+		return f.Diagrams
+	case "gofumpt":
+		return f.Gofumpt
+	case "gci":
+		return f.Gci
+	case "modTidy":
+		return f.ModTidy
+	case "coverage":
+		return f.Coverage
+	default:
+		return false
+	}
 }
 
 var (
@@ -210,6 +255,20 @@ func (l *Lock) Validate() error {
 		// Invariant: diagrams require markdown.
 		if p.Features.Diagrams && !p.Features.Markdown {
 			return fmt.Errorf("project %q: features.diagrams requires features.markdown", p.Name)
+		}
+		// Go-only verifier features and coverageMin are invalid on other languages.
+		if p.Language != LangGo {
+			for _, name := range goOnlyFeatures {
+				if p.Features.Enabled(name) {
+					return fmt.Errorf("project %q: features.%s is only valid for go projects", p.Name, name)
+				}
+			}
+			if p.CoverageMin != 0 {
+				return fmt.Errorf("project %q: coverageMin is only valid for go projects", p.Name)
+			}
+		}
+		if p.CoverageMin < 0 || p.CoverageMin > 100 {
+			return fmt.Errorf("project %q: coverageMin %d out of range (want 0-100)", p.Name, p.CoverageMin)
 		}
 	}
 	return nil

@@ -11,10 +11,15 @@ import (
 	"github.com/olesho/harness/internal/version"
 )
 
-// resolveProject builds a validated lockfile.Project from a ProjectInput using
-// the given preset defaults for unset features.
+// resolveProject builds a lockfile.Project from a ProjectInput using the given
+// preset defaults for unset features. The Go-only verifier defaults apply only to
+// Go projects; lockfile.Validate rejects them on other languages.
 func resolveProject(p ProjectInput, def presetDefaults) (lockfile.Project, error) {
 	feat := def.features
+	if p.Language == lockfile.LangGo {
+		g := def.goFeatureDefaults()
+		feat.Gofumpt, feat.Gci, feat.ModTidy, feat.Coverage = g.Gofumpt, g.Gci, g.ModTidy, g.Coverage
+	}
 	if f := p.Features; f != nil {
 		if f.Lint != nil {
 			feat.Lint = *f.Lint
@@ -28,11 +33,26 @@ func resolveProject(p ProjectInput, def presetDefaults) (lockfile.Project, error
 		if f.Diagrams != nil {
 			feat.Diagrams = *f.Diagrams
 		}
+		if f.Gofumpt != nil {
+			feat.Gofumpt = *f.Gofumpt
+		}
+		if f.Gci != nil {
+			feat.Gci = *f.Gci
+		}
+		if f.ModTidy != nil {
+			feat.ModTidy = *f.ModTidy
+		}
+		if f.Coverage != nil {
+			feat.Coverage = *f.Coverage
+		}
 	}
 	if feat.Diagrams {
 		feat.Markdown = true
 	}
 	proj := lockfile.Project{Name: p.Name, Language: p.Language, Features: feat}
+	if p.CoverageMin != nil {
+		proj.CoverageMin = *p.CoverageMin
+	}
 	if p.Language == lockfile.LangGo {
 		proj.ModulePath = p.ModulePath
 		if proj.ModulePath == "" {
@@ -77,9 +97,17 @@ func Add(root string, in *Input) (*Result, error) {
 	return execute(root, lock, files)
 }
 
+// EditInput carries the mutable per-project settings `harness edit` changes.
+// Unset (nil) fields are left unchanged; --coverage-min uses a pointer so an
+// explicit 0 is distinguishable from an omitted flag.
+type EditInput struct {
+	Features    FeaturesInput
+	CoverageMin *int
+}
+
 // Edit toggles feature flags on an existing project (language/modulePath/layout
 // are immutable). confirm must equal name.
-func Edit(root, name, confirm string, feats FeaturesInput) (*Result, error) {
+func Edit(root, name, confirm string, in EditInput) (*Result, error) {
 	if confirm != name {
 		return nil, fmt.Errorf("edit requires --confirm %s", name)
 	}
@@ -97,7 +125,9 @@ func Edit(root, name, confirm string, feats FeaturesInput) (*Result, error) {
 	if idx < 0 {
 		return nil, fmt.Errorf("no such project %q", name)
 	}
-	f := &lock.Projects[idx].Features
+	p := &lock.Projects[idx]
+	f := &p.Features
+	feats := in.Features
 	if feats.Lint != nil {
 		f.Lint = *feats.Lint
 	}
@@ -110,8 +140,23 @@ func Edit(root, name, confirm string, feats FeaturesInput) (*Result, error) {
 	if feats.Diagrams != nil {
 		f.Diagrams = *feats.Diagrams
 	}
+	if feats.Gofumpt != nil {
+		f.Gofumpt = *feats.Gofumpt
+	}
+	if feats.Gci != nil {
+		f.Gci = *feats.Gci
+	}
+	if feats.ModTidy != nil {
+		f.ModTidy = *feats.ModTidy
+	}
+	if feats.Coverage != nil {
+		f.Coverage = *feats.Coverage
+	}
 	if f.Diagrams {
 		f.Markdown = true // invariant enforced in the engine
+	}
+	if in.CoverageMin != nil {
+		p.CoverageMin = *in.CoverageMin
 	}
 	if err := lock.Validate(); err != nil {
 		return nil, err

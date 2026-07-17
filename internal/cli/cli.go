@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/olesho/harness/internal/analyzers"
 	"github.com/olesho/harness/internal/gitq"
 	"github.com/olesho/harness/internal/hook"
 	"github.com/olesho/harness/internal/lockfile"
@@ -66,6 +67,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdRepair(stdout, stderr)
 	case "install-skills":
 		return cmdInstallSkills(stdout, stderr)
+	case "install-tools":
+		return cmdInstallTools(stdout, stderr)
 	case "ci":
 		return cmdCI(stdout, stderr)
 	case "docs":
@@ -124,13 +127,32 @@ func cmdDoctor(out io.Writer) int {
 		{"uv", "https://docs.astral.sh/uv/"},
 		{"node", "https://nodejs.org/"},
 		{"pnpm", "https://pnpm.io/"},
-		{"golangci-lint", "https://golangci-lint.run/"},
 	}
 	for _, t := range tools {
 		if path, err := lookPath(t.name); err == nil {
 			fmt.Fprintf(out, "  ok    %-14s %s\n", t.name, path)
 		} else {
 			fmt.Fprintf(out, "  MISS  %-14s install: %s\n", t.name, t.hint)
+		}
+	}
+	// Harness-managed analyzers (golangci-lint/gofumpt/gci) live in a per-version
+	// cache, not on PATH — report their cache status, not a LookPath probe.
+	if lock, err := lockfile.Load(resolveRoot()); err == nil {
+		st := analyzers.Statuses(lock)
+		if len(st) > 0 {
+			fmt.Fprintln(out, "\nanalyzers (harness-managed cache):")
+			for _, s := range st {
+				switch s.State {
+				case analyzers.StateCached:
+					fmt.Fprintf(out, "  ok    %-14s %s\n", s.Analyzer.Name, s.Path)
+				case analyzers.StatePathDev:
+					fmt.Fprintf(out, "  dev   %-14s %s (PATH; HARNESS_ANALYZERS_DEV)\n", s.Analyzer.Name, s.Path)
+				case analyzers.StateCorrupt:
+					fmt.Fprintf(out, "  BAD   %-14s cache corrupt; run `harness install-tools`\n", s.Analyzer.Name)
+				default:
+					fmt.Fprintf(out, "  MISS  %-14s run `harness install-tools`\n", s.Analyzer.Name)
+				}
+			}
 		}
 	}
 	return 0
@@ -224,7 +246,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	// The project name is the first argument so that flags may follow it (Go's
 	// flag package stops at the first positional, so we peel the name off first).
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off]")
+		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N]")
 		return 2
 	}
 	name := args[0]
@@ -235,13 +257,30 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	test := fs.String("test", "", "on|off")
 	markdown := fs.String("markdown", "", "on|off")
 	diagrams := fs.String("diagrams", "", "on|off")
+	gofumpt := fs.String("gofumpt", "", "on|off (Go)")
+	gci := fs.String("gci", "", "on|off (Go)")
+	modTidy := fs.String("mod-tidy", "", "on|off (Go)")
+	coverage := fs.String("coverage", "", "on|off (Go)")
+	coverageMin := fs.Int("coverage-min", 0, "minimum total coverage percent 0-100 (Go)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	feats := setup.FeaturesInput{
-		Lint: onOff(*lint), Test: onOff(*test), Markdown: onOff(*markdown), Diagrams: onOff(*diagrams),
+	// --coverage-min uses a pointer so an explicit 0 differs from an omitted flag.
+	var covMin *int
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "coverage-min" {
+			v := *coverageMin
+			covMin = &v
+		}
+	})
+	edit := setup.EditInput{
+		Features: setup.FeaturesInput{
+			Lint: onOff(*lint), Test: onOff(*test), Markdown: onOff(*markdown), Diagrams: onOff(*diagrams),
+			Gofumpt: onOff(*gofumpt), Gci: onOff(*gci), ModTidy: onOff(*modTidy), Coverage: onOff(*coverage),
+		},
+		CoverageMin: covMin,
 	}
-	res, err := setup.Edit(resolveRoot(), name, *confirm, feats)
+	res, err := setup.Edit(resolveRoot(), name, *confirm, edit)
 	if err != nil {
 		fmt.Fprintf(errw, "harness edit: %v\n", err)
 		return 1
@@ -431,7 +470,7 @@ func cmdCI(out, errw io.Writer) int {
 	if !vr.OK() {
 		return 1
 	}
-	// Lint + test all projects.
+	// Lint + test + enabled quality verifiers, all projects.
 	lock, _ := lockfile.Load(root)
 	failed := false
 	for _, p := range lock.Projects {
@@ -441,11 +480,31 @@ func cmdCI(out, errw io.Writer) int {
 		if runner.Test(root, lock, p, out) != nil {
 			failed = true
 		}
+		if runner.ExtraChecks(root, lock, p, out) != nil {
+			failed = true
+		}
 	}
 	if failed {
 		return 1
 	}
 	fmt.Fprintln(out, "ci: ok")
+	return 0
+}
+
+// cmdInstallTools installs the pinned analyzers required by the lock's enabled
+// features into the harness-managed cache. It is the single acquisition path for
+// CI (`ci.yml`), bootstrap, and local provisioning.
+func cmdInstallTools(out, errw io.Writer) int {
+	lock, err := lockfile.Load(resolveRoot())
+	if err != nil {
+		fmt.Fprintf(errw, "harness install-tools: %v\n", err)
+		return 1
+	}
+	if err := analyzers.Install(lock, out); err != nil {
+		fmt.Fprintf(errw, "harness install-tools: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(out, "install-tools: ok")
 	return 0
 }
 
@@ -458,7 +517,7 @@ setup & lifecycle:
   setup        scaffold a new managed project (--config -, --preset, --print-config-template)
   bootstrap    install dependencies and git-hook delegates
   add          append projects to a monorepo (--config -)
-  edit         toggle a project's features (edit <name> --confirm <name> --lint on|off ...)
+  edit         toggle a project's features (edit <name> --confirm <name> --lint on|off --gofumpt on|off --coverage-min 80 ...)
   reconfigure  toggle repo capabilities (reconfigure --ci on --skills off --codex on ...)
   remove       unregister a project (remove <name> --confirm <name> [--archive])
   verify       check the working tree matches harness.lock.json
@@ -475,6 +534,7 @@ introspection:
   toolchain --language <l> --json   dump the command table
   doctor                        diagnose the toolchain (read-only)
   install-skills                install the global setup skill/prompt
+  install-tools                 install pinned analyzers (golangci-lint/gofumpt/gci) into the cache
   version                       print the harness version
 `)
 }
@@ -494,7 +554,8 @@ const configTemplate = `{
       "name": "myproj",
       "language": "go",
       "modulePath": "example.com/myproj",
-      "features": { "lint": true, "test": true, "markdown": false, "diagrams": false }
+      "features": { "lint": true, "test": true, "markdown": false, "diagrams": false, "gofumpt": false, "gci": false, "modTidy": false, "coverage": false },
+      "coverageMin": 0
     }
   ]
 }

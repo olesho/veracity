@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
+	"github.com/olesho/harness/internal/analyzers"
 	"github.com/olesho/harness/internal/docgen"
 	"github.com/olesho/harness/internal/gitq"
 	"github.com/olesho/harness/internal/lockfile"
@@ -47,6 +49,19 @@ func Bootstrap(root string, out io.Writer) error {
 		} else {
 			fmt.Fprintf(out, "deps [%s]: ok\n", p.Name)
 		}
+	}
+
+	// Report the harness-managed analyzers the enabled features need. Bootstrap
+	// deliberately does not compile them — that keeps it fast and offline; the
+	// explicit `harness install-tools` provisions the pinned cache (CI runs it,
+	// and the git-hook/CI gates hard-fail with that same hint if a required tool
+	// is missing, so an unprovisioned repo can never pass silently).
+	if req := analyzers.Required(lock); len(req) > 0 {
+		names := make([]string, 0, len(req))
+		for _, a := range req {
+			names = append(names, a.Name)
+		}
+		fmt.Fprintf(out, "analyzers: run `harness install-tools` to provision %s\n", strings.Join(names, ", "))
 	}
 
 	// Render structural docs now (deterministic, no LLM) so they exist right

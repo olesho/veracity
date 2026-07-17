@@ -114,7 +114,7 @@ func runPostEdit(root string, stdin io.Reader, stderr io.Writer) int {
 		return 0
 	}
 	proj, ok := fileset.ProjectOf(lock, rel)
-	if !ok || !proj.Features.Lint {
+	if !ok || !hasFastChecks(proj.Features) {
 		return 0
 	}
 	files := fileset.FilterByLanguage(lock, proj, []string{rel})
@@ -122,11 +122,17 @@ func runPostEdit(root string, stdin io.Reader, stderr io.Writer) int {
 		return 0 // not a source file of the project's language
 	}
 	var buf bytes.Buffer
-	if err := runner.LintFiles(root, lock, proj, files, &buf); err != nil {
-		fmt.Fprintf(stderr, "harness: lint failed for the file you just edited:\n\n%s\nFix these before continuing.\n", buf.String())
+	if err := runner.FileChecks(root, lock, proj, files, &buf); err != nil {
+		fmt.Fprintf(stderr, "harness: checks failed for the file you just edited:\n\n%s\nRun `harness fmt` to auto-fix formatting/imports, then address anything left, before continuing.\n", buf.String())
 		return 2 // block with feedback (the model self-corrects this turn)
 	}
 	return 0
+}
+
+// hasFastChecks reports whether a project has any check the agent edit-loop
+// enforces per file (lint or the fast formatters gofumpt/gci).
+func hasFastChecks(f lockfile.Features) bool {
+	return f.Lint || f.Gofumpt || f.Gci
 }
 
 func runStop(root string, stdin io.Reader, stderr io.Writer) int {
@@ -154,14 +160,14 @@ func runStop(root string, stdin io.Reader, stderr io.Writer) int {
 	failed := false
 	for name, files := range groups {
 		proj, ok := lock.Find(name)
-		if !ok || !proj.Features.Lint {
+		if !ok || !hasFastChecks(proj.Features) {
 			continue
 		}
 		srcFiles := fileset.FilterByLanguage(lock, proj, files)
 		if len(srcFiles) == 0 {
 			continue
 		}
-		if err := runner.LintFiles(root, lock, proj, srcFiles, &buf); err != nil {
+		if err := runner.FileChecks(root, lock, proj, srcFiles, &buf); err != nil {
 			failed = true
 		}
 	}
@@ -170,7 +176,7 @@ func runStop(root string, stdin io.Reader, stderr io.Writer) int {
 	_, _ = docgen.Render(root, lock, true, false, io.Discard)
 
 	if failed {
-		fmt.Fprintf(stderr, "harness: lint issues in files changed this session:\n\n%s\nFix these before finishing.\n", buf.String())
+		fmt.Fprintf(stderr, "harness: check issues in files changed this session:\n\n%s\nRun `harness fmt` to auto-fix formatting/imports, then fix anything left, before finishing.\n", buf.String())
 		return 2
 	}
 	// Non-blocking nudge: if diagrams are enabled and prose summaries are stale
@@ -242,6 +248,11 @@ func runGitGate(root string, stderr io.Writer, test bool) int {
 	for _, proj := range lock.Projects {
 		if test {
 			if err := runner.Test(root, lock, proj, stderr); err != nil {
+				failed = true
+			}
+			// Pre-push also runs the enabled quality verifiers (gofumpt/gci/
+			// mod-tidy/coverage); pre-commit stays fast with lint only.
+			if err := runner.ExtraChecks(root, lock, proj, stderr); err != nil {
 				failed = true
 			}
 		} else {
