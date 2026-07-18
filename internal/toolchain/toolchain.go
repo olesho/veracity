@@ -41,7 +41,8 @@ const (
 	PhaseGofumpt  Phase = "gofumpt"  // gofumpt -l (stricter format check)
 	PhaseGci      Phase = "gci"      // gci list (import ordering check)
 	PhaseModTidy  Phase = "mod_tidy" // go mod tidy -diff (module hygiene)
-	PhaseCoverage Phase = "coverage" // go test -coverprofile → threshold gate
+	PhaseCoverage Phase = "coverage" // coverage run → threshold gate (Go/TS)
+	PhaseAudit    Phase = "audit"    // pnpm audit (TS dependency-vulnerability gate)
 )
 
 // Phases is the canonical, language-independent lifecycle order that every
@@ -49,17 +50,19 @@ const (
 // verifier phases are declared per language and surfaced via AllPhases.
 var Phases = []Phase{PhaseFormat, PhaseFileLint, PhaseProjectLint, PhaseTest}
 
-// goVerifierPhases are the optional Go-only verifier phases, appended after the
-// global lifecycle phases for the Go machine interface and phase iteration.
-var goVerifierPhases = []Phase{PhaseGofumpt, PhaseGci, PhaseModTidy, PhaseCoverage}
+// verifierPhases are the optional, language-specific verifier phases appended
+// after the global lifecycle phases for each language's machine interface and
+// phase iteration. Each is gated by its own per-project feature in the runner.
+var verifierPhases = map[string][]Phase{
+	lockfile.LangGo: {PhaseGofumpt, PhaseGci, PhaseModTidy, PhaseCoverage},
+	lockfile.LangTS: {PhaseCoverage, PhaseAudit},
+}
 
 // AllPhases returns the global lifecycle phases plus any language-specific
 // verifier phases, in deterministic order.
 func AllPhases(lang string) []Phase {
 	out := append([]Phase{}, Phases...)
-	if lang == lockfile.LangGo {
-		out = append(out, goVerifierPhases...)
-	}
+	out = append(out, verifierPhases[lang]...)
 	return out
 }
 
@@ -166,6 +169,13 @@ var specs = map[string]langSpec{
 				cmd(NoFiles, false, "pnpm", "exec", "tsc", "--noEmit"),
 			},
 			PhaseTest: {cmd(NoFiles, false, "pnpm", "exec", "vitest", "run")},
+			// TS verifier phases (gated by their own features in the runner).
+			// runner.Coverage builds this argv and appends the vitest threshold flag.
+			PhaseCoverage: {cmd(NoFiles, false, "pnpm", "exec", "vitest", "run", "--coverage")},
+			// --prod audits only production dependencies: a scaffold (dev-deps only)
+			// passes clean, while runtime deps the user adds are gated. Dev-tooling
+			// advisories (test/build tools) churn constantly and aren't shipped.
+			PhaseAudit: {cmd(NoFiles, false, "pnpm", "audit", "--prod", "--audit-level", "high")},
 		},
 	},
 }

@@ -42,12 +42,16 @@ type FeaturesInput struct {
 	Markdown *bool `json:"markdown,omitempty"`
 	Diagrams *bool `json:"diagrams,omitempty"`
 	// Go-only quality verifiers.
-	Gofumpt  *bool `json:"gofumpt,omitempty"`
-	Gci      *bool `json:"gci,omitempty"`
-	ModTidy  *bool `json:"modTidy,omitempty"`
+	Gofumpt *bool `json:"gofumpt,omitempty"`
+	Gci     *bool `json:"gci,omitempty"`
+	ModTidy *bool `json:"modTidy,omitempty"`
+	// Coverage is valid for Go and TypeScript.
 	Coverage *bool `json:"coverage,omitempty"`
+	// TypeScript-only verifiers.
+	Audit *bool `json:"audit,omitempty"`
 	// Language-agnostic verifiers.
-	Sonar *bool `json:"sonar,omitempty"`
+	Semgrep *bool `json:"semgrep,omitempty"`
+	Sonar   *bool `json:"sonar,omitempty"`
 }
 
 // Presets.
@@ -69,6 +73,15 @@ type presetDefaults struct {
 func (d presetDefaults) goFeatureDefaults() lockfile.Features {
 	if d.name == PresetFull {
 		return lockfile.Features{Gofumpt: true, Gci: true, ModTidy: true, Coverage: true}
+	}
+	return lockfile.Features{}
+}
+
+// tsFeatureDefaults returns the TypeScript verifier defaults for this preset,
+// applied only to TypeScript projects (see resolveProject).
+func (d presetDefaults) tsFeatureDefaults() lockfile.Features {
+	if d.name == PresetFull {
+		return lockfile.Features{Coverage: true, Audit: true, Semgrep: true}
 	}
 	return lockfile.Features{}
 }

@@ -135,13 +135,14 @@ func TestInitRefusesNonEmpty(t *testing.T) {
 	}
 }
 
-func TestFullPresetVerifiersAreGoOnly(t *testing.T) {
+func TestFullPresetVerifiersPerLanguage(t *testing.T) {
 	in := &Input{
 		Layout: lockfile.LayoutMonorepo,
 		Preset: PresetFull,
 		Projects: []ProjectInput{
 			{Name: "api", Language: lockfile.LangGo, ModulePath: "example.com/api"},
 			{Name: "worker", Language: lockfile.LangPython},
+			{Name: "web", Language: lockfile.LangTS},
 		},
 	}
 	lock, err := Resolve(in)
@@ -152,12 +153,22 @@ func TestFullPresetVerifiersAreGoOnly(t *testing.T) {
 	if !goFeat.Gofumpt || !goFeat.Gci || !goFeat.ModTidy || !goFeat.Coverage {
 		t.Errorf("full preset should enable all Go verifiers, got %+v", goFeat)
 	}
+	if goFeat.Audit || goFeat.Semgrep {
+		t.Errorf("go project must not receive TS-only verifiers, got %+v", goFeat)
+	}
 	if lock.Projects[0].CoverageMin != 0 {
 		t.Errorf("full preset coverageMin should default to 0, got %d", lock.Projects[0].CoverageMin)
 	}
 	py := lock.Projects[1].Features
-	if py.Gofumpt || py.Gci || py.ModTidy || py.Coverage {
-		t.Errorf("python project must not receive Go verifiers, got %+v", py)
+	if py.Gofumpt || py.Gci || py.ModTidy || py.Coverage || py.Audit {
+		t.Errorf("python project must not receive Go/TS verifiers, got %+v", py)
+	}
+	ts := lock.Projects[2].Features
+	if !ts.Coverage || !ts.Audit || !ts.Semgrep {
+		t.Errorf("full preset should enable TS verifiers (coverage/audit/semgrep), got %+v", ts)
+	}
+	if ts.Gofumpt || ts.Gci || ts.ModTidy {
+		t.Errorf("ts project must not receive Go-only verifiers, got %+v", ts)
 	}
 }
 

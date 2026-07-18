@@ -106,7 +106,8 @@ afterward without re-running setup:
 harness edit myapp --confirm myapp --diagrams on      # enabling diagrams also enables markdown
 harness edit myapp --confirm myapp --lint off --test off
 harness edit myapp --confirm myapp --gofumpt on --gci on --mod-tidy on   # Go quality verifiers
-harness edit myapp --confirm myapp --coverage on --coverage-min 80       # fail below 80% coverage
+harness edit myapp --confirm myapp --coverage on --coverage-min 80       # fail below 80% coverage (Go/TS)
+harness edit web --confirm web --audit on --semgrep on                   # TS/SAST verifiers
 
 # repo-level capabilities (no name; add/remove wiring, CI, skills, agents)
 harness reconfigure --ci on --agent-docs on           # creates ci.yml, CLAUDE.md, ...
@@ -131,8 +132,9 @@ verifiers (all on under the `full` preset). The fast formatters **gofumpt** and
 **gci** also run in the agent edit-loop (post-edit/stop hooks) so an AI agent gets
 blocked-with-feedback and self-corrects each turn — `harness fmt` auto-fixes both.
 The heavier **modTidy** and **coverage** checks run at the git **pre-push** hook
-and in **`harness ci`**. They are Go-only — `harness setup`/`edit` reject them on
-Python/TypeScript projects. Enforcement by tier:
+and in **`harness ci`**. `gofumpt`/`gci`/`modTidy` are Go-only (`coverage` is shared
+with TypeScript — see below); `harness setup`/`edit` reject a verifier on a language
+it doesn't support. Enforcement by tier:
 
 | Tier | Runs |
 |---|---|
@@ -161,9 +163,44 @@ each analyzer's cache status. If an enabled verifier's tool is missing, the gate
 (`HARNESS_ANALYZERS_DEV=1` allows a version-verified PATH binary for local
 development.)
 
-**Roadmap:** a security/supply-chain group — `gosec`, `govulncheck`,
-`osv-scanner`, and `syft`/`grype` (SBOM) — is planned as the same kind of Go-only
-toggles; it is not implemented yet.
+## TypeScript quality & security verifiers (optional)
+
+TypeScript projects come with the same tiered enforcement as Go. Two things are
+**baseline** (always on for scaffolded projects, no flag):
+
+- **Strict ESLint** — the generated `eslint.config.js` uses type-aware
+  `strictTypeChecked` (+ `stylisticTypeChecked`), catching unsafe `any`, floating
+  promises, and unnecessary conditions the non-type-aware rules miss. `strict` is
+  also on in `tsconfig.json`. (Adopted projects with an existing ESLint config are
+  left untouched.)
+- **Prettier** — formatting is enforced in the file-lint and project-lint phases.
+- **Native git hooks replace Husky + lint-staged** — harness installs
+  `.git/hooks` delegates directly, so you don't add those dev-dependencies.
+
+Beyond that, three independent, off-by-default verifiers (all on under the `full`
+preset) toggle like the Go ones:
+
+| Feature | What it checks | `edit` flag | Runs at |
+|---|---|---|---|
+| `coverage` | total line coverage ≥ `coverageMin` (via `vitest --coverage`) | `--coverage on\|off`, `--coverage-min N` | pre-push, `harness ci` |
+| `audit` | production dependency vulnerabilities (`pnpm audit --prod --audit-level high`) | `--audit on\|off` | pre-push, `harness ci` |
+| `semgrep` | SAST scan (`semgrep --config auto`, any language) | `--semgrep on\|off` | pre-push, `harness ci` |
+
+`coverage` is now shared by Go and TypeScript (same `coverageMin` field; `0`
+measures-and-reports without failing). `audit` scans **production** dependencies
+only, so a scaffold (dev-deps only) passes clean while real runtime deps are
+gated. `semgrep` is language-agnostic and runs via Docker — like the `sonar` verifier it **soft-skips** (WARN, no failure) when Docker
+is unavailable, so it never blocks a machine that lacks it. `harness doctor` reports
+Docker availability for both. `pnpm audit` and vitest coverage come from the
+project's own `package.json` (harness adds `@vitest/coverage-v8`), not the
+`go install`-based analyzer cache.
+
+**Roadmap:**
+- Go security/supply-chain group — `gosec`, `govulncheck`, `osv-scanner`, and
+  `syft`/`grype` (SBOM) — planned as Go-only toggles; not implemented yet.
+- CI-native checks that need GitHub Actions PR context — **CodeQL** and
+  **Danger JS** — will be generated as standalone workflow jobs (they can't run
+  inside `harness ci`); not implemented yet.
 
 ## Concepts
 

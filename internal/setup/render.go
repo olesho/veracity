@@ -24,6 +24,10 @@ type tmplData struct {
 	Name       string
 	ModulePath string
 	RepoName   string
+	// Language presence flags for wiring templates (e.g. CI setup steps).
+	HasGo     bool
+	HasTS     bool
+	HasPython bool
 }
 
 func renderAsset(assetPath string, data tmplData) ([]byte, error) {
@@ -85,9 +89,11 @@ func projectConfigSpecs(lang string) []fileSpec {
 	case lockfile.LangTS:
 		return []fileSpec{
 			{"templates/typescript/package.json.tmpl", "package.json"},
+			{"templates/typescript/pnpm-workspace.yaml", "pnpm-workspace.yaml"},
 			{"templates/typescript/tsconfig.json", "tsconfig.json"},
 			{"templates/typescript/eslint.config.js", "eslint.config.js"},
 			{"templates/typescript/prettierrc.json", ".prettierrc.json"},
+			{"templates/typescript/prettierignore", ".prettierignore"},
 			{"templates/typescript/vitest.config.ts", "vitest.config.ts"},
 		}
 	default:
@@ -171,6 +177,16 @@ func anyDocsFeature(lock *lockfile.Lock) bool {
 func wiringFiles(repoName string, lock *lockfile.Lock) ([]renderFile, error) {
 	caps := lock.Capabilities
 	data := tmplData{RepoName: repoName}
+	for _, p := range lock.Projects {
+		switch p.Language {
+		case lockfile.LangGo:
+			data.HasGo = true
+		case lockfile.LangTS:
+			data.HasTS = true
+		case lockfile.LangPython:
+			data.HasPython = true
+		}
+	}
 	var out []renderFile
 	add := func(asset, dest string, kind ownership.Kind) error {
 		content, err := renderAsset(asset, data)
@@ -219,7 +235,7 @@ func wiringFiles(repoName string, lock *lockfile.Lock) ([]renderFile, error) {
 		}
 	}
 	if caps.CI {
-		if err := add("wiring/ci.yml", ".github/workflows/ci.yml", ownership.Managed); err != nil {
+		if err := add("wiring/ci.yml.tmpl", ".github/workflows/ci.yml", ownership.Managed); err != nil {
 			return nil, err
 		}
 		if err := add("wiring/ci-setup.md", "docs/ci-setup.md", ownership.Managed); err != nil {

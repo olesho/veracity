@@ -12,13 +12,17 @@ import (
 )
 
 // resolveProject builds a lockfile.Project from a ProjectInput using the given
-// preset defaults for unset features. The Go-only verifier defaults apply only to
-// Go projects; lockfile.Validate rejects them on other languages.
+// preset defaults for unset features. Language-specific verifier defaults apply
+// only to their language; lockfile.Validate rejects them on other languages.
 func resolveProject(p ProjectInput, def presetDefaults) (lockfile.Project, error) {
 	feat := def.features
-	if p.Language == lockfile.LangGo {
+	switch p.Language {
+	case lockfile.LangGo:
 		g := def.goFeatureDefaults()
 		feat.Gofumpt, feat.Gci, feat.ModTidy, feat.Coverage = g.Gofumpt, g.Gci, g.ModTidy, g.Coverage
+	case lockfile.LangTS:
+		t := def.tsFeatureDefaults()
+		feat.Coverage, feat.Audit, feat.Semgrep = t.Coverage, t.Audit, t.Semgrep
 	}
 	if f := p.Features; f != nil {
 		if f.Lint != nil {
@@ -44,6 +48,12 @@ func resolveProject(p ProjectInput, def presetDefaults) (lockfile.Project, error
 		}
 		if f.Coverage != nil {
 			feat.Coverage = *f.Coverage
+		}
+		if f.Audit != nil {
+			feat.Audit = *f.Audit
+		}
+		if f.Semgrep != nil {
+			feat.Semgrep = *f.Semgrep
 		}
 		if f.Sonar != nil {
 			feat.Sonar = *f.Sonar
@@ -154,6 +164,12 @@ func Edit(root, name, confirm string, in EditInput) (*Result, error) {
 	}
 	if feats.Coverage != nil {
 		f.Coverage = *feats.Coverage
+	}
+	if feats.Audit != nil {
+		f.Audit = *feats.Audit
+	}
+	if feats.Semgrep != nil {
+		f.Semgrep = *feats.Semgrep
 	}
 	if feats.Sonar != nil {
 		f.Sonar = *feats.Sonar

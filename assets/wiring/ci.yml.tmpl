@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  harness-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Go is always required to install the pinned harness binary itself.
+      - uses: actions/setup-go@v5
+        with:
+{{- if .HasGo}}
+          go-version-file: go.mod
+{{- else}}
+          go-version: "1.26"
+{{- end}}
+{{- if .HasTS}}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+{{- end}}
+{{- if .HasPython}}
+      - uses: astral-sh/setup-uv@v5
+{{- end}}
+      - name: Install pinned harness
+        run: go install github.com/olesho/harness/cmd/harness@$(cat .harness-version)
+      - name: Install dependencies
+        run: harness bootstrap
+      - name: Install pinned analyzers
+        run: harness install-tools
+      - name: harness ci
+        run: harness ci

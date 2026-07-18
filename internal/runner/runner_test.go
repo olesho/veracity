@@ -90,7 +90,7 @@ func TestVerifierWrappersNoticeWhenDisabled(t *testing.T) {
 	root := t.TempDir()
 	lock := goLock() // verifiers all off
 	for _, fn := range []func(string, *lockfile.Lock, lockfile.Project, io.Writer) error{
-		Gofumpt, Gci, ModTidy, Coverage,
+		Gofumpt, Gci, ModTidy, Coverage, Audit,
 	} {
 		var out bytes.Buffer
 		if err := fn(root, lock, lock.Projects[0], &out); err != nil {
@@ -226,5 +226,30 @@ func TestCoverageGate(t *testing.T) {
 	out.Reset()
 	if err := Coverage(root, lock, lock.Projects[0], &out); err != nil {
 		t.Fatalf("report-only coverage should pass: %v\n%s", err, out.String())
+	}
+}
+
+// tsCoverageArgv appends vitest's threshold flag only when a minimum is set, so
+// CoverageMin=0 stays report-only while a positive minimum lets vitest gate.
+func TestTSCoverageArgv(t *testing.T) {
+	proj := lockfile.Project{Name: "web", Language: lockfile.LangTS,
+		Features: lockfile.Features{Coverage: true}}
+
+	proj.CoverageMin = 0
+	argv := tsCoverageArgv(proj)
+	if strings.Join(argv, " ") != "pnpm exec vitest run --coverage" {
+		t.Errorf("report-only argv = %q", argv)
+	}
+	for _, a := range argv {
+		if strings.Contains(a, "thresholds") {
+			t.Errorf("min=0 must not add a threshold flag, got %q", argv)
+		}
+	}
+
+	proj.CoverageMin = 80
+	argv = tsCoverageArgv(proj)
+	last := argv[len(argv)-1]
+	if last != "--coverage.thresholds.lines=80" {
+		t.Errorf("min=80 threshold flag = %q, want --coverage.thresholds.lines=80", last)
 	}
 }

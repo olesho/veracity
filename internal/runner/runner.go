@@ -189,15 +189,76 @@ func ModTidy(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Wri
 	return RunPhase(root, lock, proj, toolchain.PhaseModTidy, nil, out)
 }
 
-// Coverage runs the coverage gate: it generates a profile into an exclusive temp
-// file and computes total statement coverage from the profile itself (not the
-// rounded `go tool cover -func` display), failing when it is below
-// proj.CoverageMin. A CoverageMin of 0 measures and reports but never fails.
+// ModTidy runs the module-hygiene check (go mod tidy -diff) when enabled — kept
+// above Audit so the verifier wrappers read top-to-bottom in ExtraChecks order.
+
+// Audit runs the TypeScript dependency-vulnerability gate (pnpm audit) when
+// enabled.
+func Audit(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
+	if !proj.Features.Audit {
+		fmt.Fprintf(out, "NOTICE [%s] audit disabled\n", proj.Name)
+		return nil
+	}
+	return RunPhase(root, lock, proj, toolchain.PhaseAudit, nil, out)
+}
+
+// Coverage runs the coverage gate, failing when total coverage is below
+// proj.CoverageMin. A CoverageMin of 0 measures and reports but never fails. It
+// dispatches on language: Go parses a coverage profile itself; TypeScript defers
+// the threshold check to vitest.
 func Coverage(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
 	if !proj.Features.Coverage {
 		fmt.Fprintf(out, "NOTICE [%s] coverage disabled\n", proj.Name)
 		return nil
 	}
+	if proj.Language == lockfile.LangTS {
+		return coverageTS(root, lock, proj, out)
+	}
+	return coverageGo(root, lock, proj, out)
+}
+
+// tsCoverageArgv builds the `vitest run --coverage` invocation, appending
+// vitest's own line-threshold flag when CoverageMin > 0 so vitest enforces the
+// gate and exits nonzero itself. Returns nil when the phase has no command.
+func tsCoverageArgv(proj lockfile.Project) []string {
+	cmds := toolchain.Commands(proj.Language, toolchain.PhaseCoverage)
+	if len(cmds) == 0 {
+		return nil
+	}
+	argv := append([]string{}, cmds[0].Argv...)
+	if proj.CoverageMin > 0 {
+		argv = append(argv, fmt.Sprintf("--coverage.thresholds.lines=%d", proj.CoverageMin))
+	}
+	return argv
+}
+
+// coverageTS runs the vitest coverage gate for a TypeScript project.
+func coverageTS(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
+	argv := tsCoverageArgv(proj)
+	if len(argv) == 0 {
+		return nil
+	}
+	display := strings.Join(argv, " ")
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir = projectDir(root, lock, proj)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(out, "FAIL [%s] %s\n", proj.Name, display)
+		if s := strings.TrimRight(buf.String(), "\n"); s != "" {
+			fmt.Fprintln(out, s)
+		}
+		return fmt.Errorf("%s: coverage below minimum %d%% (or test run failed)", proj.Name, proj.CoverageMin)
+	}
+	fmt.Fprintf(out, "NOTICE [%s] coverage: passed (min %d%%)\n", proj.Name, proj.CoverageMin)
+	return nil
+}
+
+// coverageGo generates a Go coverage profile into an exclusive temp file and
+// computes total statement coverage from the profile itself (not the rounded
+// `go tool cover -func` display), failing when it is below proj.CoverageMin.
+func coverageGo(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
 	cmds := toolchain.Commands(proj.Language, toolchain.PhaseCoverage)
 	if len(cmds) == 0 {
 		return nil
@@ -242,8 +303,8 @@ func Coverage(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Wr
 	return nil
 }
 
-// ExtraChecks runs every enabled Go quality verifier for a project (quietly
-// skipping disabled ones) and returns the first error.
+// ExtraChecks runs every enabled quality/security verifier for a project
+// (quietly skipping disabled ones) and returns the first error.
 func ExtraChecks(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
 	var firstErr error
 	record := func(err error) {
@@ -262,6 +323,12 @@ func ExtraChecks(root string, lock *lockfile.Lock, proj lockfile.Project, out io
 	}
 	if proj.Features.Coverage {
 		record(Coverage(root, lock, proj, out))
+	}
+	if proj.Features.Audit {
+		record(Audit(root, lock, proj, out))
+	}
+	if proj.Features.Semgrep {
+		record(Semgrep(root, lock, proj, out))
 	}
 	if proj.Features.Sonar {
 		record(Sonar(root, lock, proj, out))

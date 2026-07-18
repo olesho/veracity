@@ -78,7 +78,7 @@ func TestJSONUnknownLanguage(t *testing.T) {
 	}
 }
 
-func TestAllPhasesGoOnlyVerifiers(t *testing.T) {
+func TestAllPhasesVerifiers(t *testing.T) {
 	has := func(phs []Phase, p Phase) bool {
 		for _, x := range phs {
 			if x == p {
@@ -87,23 +87,32 @@ func TestAllPhasesGoOnlyVerifiers(t *testing.T) {
 		}
 		return false
 	}
-	goPhases := AllPhases(lockfile.LangGo)
-	for _, p := range goVerifierPhases {
-		if !has(goPhases, p) {
-			t.Errorf("AllPhases(go) missing verifier phase %q", p)
-		}
-		if len(Commands(lockfile.LangGo, p)) == 0 {
-			t.Errorf("go verifier phase %q has no commands", p)
+	// Each language's declared verifier phases must be present in AllPhases and
+	// have commands defined.
+	for lang, phases := range verifierPhases {
+		all := AllPhases(lang)
+		for _, p := range phases {
+			if !has(all, p) {
+				t.Errorf("AllPhases(%s) missing verifier phase %q", lang, p)
+			}
+			if len(Commands(lang, p)) == 0 {
+				t.Errorf("%s verifier phase %q has no commands", lang, p)
+			}
 		}
 	}
-	// Other languages must not carry the Go-only verifier phases.
-	for _, lang := range []string{lockfile.LangPython, lockfile.LangTS} {
-		for _, p := range goVerifierPhases {
-			if has(AllPhases(lang), p) {
-				t.Errorf("AllPhases(%s) unexpectedly includes %q", lang, p)
-			}
-			if len(Commands(lang, p)) != 0 {
-				t.Errorf("%s should have no commands for verifier phase %q", lang, p)
+	// A language must not carry a verifier phase it did not declare. Coverage is
+	// shared (Go+TS); the Go-only phases (gofumpt/gci/mod_tidy) and the TS-only
+	// phase (audit) must not leak across languages.
+	declares := func(lang string, p Phase) bool { return has(verifierPhases[lang], p) }
+	for _, lang := range []string{lockfile.LangGo, lockfile.LangPython, lockfile.LangTS} {
+		for _, p := range []Phase{PhaseGofumpt, PhaseGci, PhaseModTidy, PhaseCoverage, PhaseAudit} {
+			if !declares(lang, p) {
+				if has(AllPhases(lang), p) {
+					t.Errorf("AllPhases(%s) unexpectedly includes %q", lang, p)
+				}
+				if len(Commands(lang, p)) != 0 {
+					t.Errorf("%s should have no commands for undeclared verifier phase %q", lang, p)
+				}
 			}
 		}
 	}

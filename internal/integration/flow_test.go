@@ -173,6 +173,12 @@ func TestToggleFeaturesAndCapabilities(t *testing.T) {
 		t.Fatalf("reconfigure --ci on failed: %s", e)
 	}
 	mustExist(t, root, ".github/workflows/ci.yml", "docs/ci-setup.md")
+	// Regression: a Go-only repo's CI must not carry Node/pnpm setup steps.
+	if ci, err := os.ReadFile(filepath.Join(root, ".github/workflows/ci.yml")); err != nil {
+		t.Fatalf("reading ci.yml: %v", err)
+	} else if strings.Contains(string(ci), "pnpm") || strings.Contains(string(ci), "setup-node") {
+		t.Errorf("go-only ci.yml should not include Node/pnpm setup:\n%s", ci)
+	}
 	if code, _, e := run(t, "", "reconfigure", "--ci", "off"); code != 0 {
 		t.Fatalf("reconfigure --ci off failed: %s", e)
 	}
@@ -187,6 +193,81 @@ func TestToggleFeaturesAndCapabilities(t *testing.T) {
 	mustExist(t, root, ".codex/config.toml")
 	if code, o, e := run(t, "", "verify"); code != 0 {
 		t.Fatalf("verify failed after toggles: %s%s", o, e)
+	}
+}
+
+// TestTSProjectCIAndVerifiers checks that a TypeScript project gets language-aware
+// CI (Node/pnpm setup steps) and that the TS verifier toggles round-trip through
+// edit and validate.
+func TestTSProjectCIAndVerifiers(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
+
+	cfg := `{"layout":"single","preset":"standard","capabilities":{"ci":true},` +
+		`"projects":[{"name":"web","language":"typescript","features":{"lint":true,"test":true}}]}`
+	if code, _, e := run(t, cfg, "setup", "--config", "-", "--no-git"); code != 0 {
+		t.Fatalf("ts setup failed (%d): %s", code, e)
+	}
+	mustExist(t, root, "package.json", "eslint.config.js", "tsconfig.json",
+		"pnpm-workspace.yaml", ".prettierignore", ".github/workflows/ci.yml")
+
+	// pnpm-workspace.yaml must keep pnpm's ignored-build gate from hard-failing
+	// `pnpm install`/`pnpm exec` on a fresh checkout.
+	if ws, err := os.ReadFile(filepath.Join(root, "pnpm-workspace.yaml")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(ws), "strictDepBuilds: false") {
+		t.Errorf("pnpm-workspace.yaml should set strictDepBuilds: false:\n%s", ws)
+	}
+	// .prettierignore must exclude the generated pnpm lockfile.
+	if pi, err := os.ReadFile(filepath.Join(root, ".prettierignore")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(pi), "pnpm-lock.yaml") {
+		t.Errorf(".prettierignore should exclude pnpm-lock.yaml:\n%s", pi)
+	}
+
+	// package.json ships the vitest coverage provider.
+	if pj, err := os.ReadFile(filepath.Join(root, "package.json")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(pj), "@vitest/coverage-v8") {
+		t.Errorf("package.json should include @vitest/coverage-v8:\n%s", pj)
+	}
+
+	// eslint.config.js uses the strict type-aware ruleset.
+	if ec, err := os.ReadFile(filepath.Join(root, "eslint.config.js")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(ec), "strictTypeChecked") {
+		t.Errorf("eslint.config.js should use strictTypeChecked:\n%s", ec)
+	}
+
+	// CI must set up Node + pnpm for the TypeScript project.
+	ci, err := os.ReadFile(filepath.Join(root, ".github/workflows/ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"setup-node", "pnpm/action-setup"} {
+		if !strings.Contains(string(ci), want) {
+			t.Errorf("ts ci.yml missing %q:\n%s", want, ci)
+		}
+	}
+
+	// TS verifiers round-trip through edit and pass validation.
+	if code, _, e := run(t, "", "edit", "web", "--confirm", "web",
+		"--coverage", "on", "--coverage-min", "75", "--audit", "on", "--semgrep", "on"); code != 0 {
+		t.Fatalf("edit ts verifiers failed: %s", e)
+	}
+	if code, o, e := run(t, "", "verify"); code != 0 {
+		t.Fatalf("verify failed after ts verifier toggles: %s%s", o, e)
+	}
+	code, out, _ := run(t, "", "lock-query", "web", "--json")
+	if code != 0 || !strings.Contains(out, `"audit": true`) || !strings.Contains(out, `"semgrep": true`) {
+		t.Fatalf("ts verifiers not persisted: %s", out)
+	}
+	// coverageMin lives in the lock file (not the lock-query projection).
+	if lb, err := os.ReadFile(filepath.Join(root, "harness.lock.json")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(lb), `"coverageMin": 75`) {
+		t.Errorf("coverageMin 75 not persisted to lock:\n%s", lb)
 	}
 }
 

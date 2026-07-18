@@ -90,17 +90,49 @@ type Features struct {
 	Markdown bool `json:"markdown"`
 	Diagrams bool `json:"diagrams"`
 	// Go-only quality verifiers (independent per-project toggles).
-	Gofumpt  bool `json:"gofumpt,omitempty"`  // stricter formatter (superset of gofmt)
-	Gci      bool `json:"gci,omitempty"`      // deterministic import section ordering
-	ModTidy  bool `json:"modTidy,omitempty"`  // `go mod tidy -diff` hygiene check
-	Coverage bool `json:"coverage,omitempty"` // total-coverage gate (see Project.CoverageMin)
+	Gofumpt bool `json:"gofumpt,omitempty"` // stricter formatter (superset of gofmt)
+	Gci     bool `json:"gci,omitempty"`     // deterministic import section ordering
+	ModTidy bool `json:"modTidy,omitempty"` // `go mod tidy -diff` hygiene check
+	// Coverage is a total-coverage gate (see Project.CoverageMin); valid for Go and
+	// TypeScript.
+	Coverage bool `json:"coverage,omitempty"`
+	// TypeScript-only verifiers.
+	Audit bool `json:"audit,omitempty"` // `pnpm audit` dependency-vulnerability gate
 	// Language-agnostic verifiers.
-	Sonar bool `json:"sonar,omitempty"` // SonarQube scan (self-hosted; soft-skips when unreachable)
+	Semgrep bool `json:"semgrep,omitempty"` // Semgrep SAST scan (Docker; soft-skips when unavailable)
+	Sonar   bool `json:"sonar,omitempty"`   // SonarQube scan (self-hosted; soft-skips when unreachable)
 }
 
-// goOnlyFeatures lists the feature JSON keys that are only valid for Go
-// projects, used by Enabled and by Validate's language guard.
-var goOnlyFeatures = []string{"gofumpt", "gci", "modTidy", "coverage"}
+// featureLanguages restricts a feature to specific languages. A feature absent
+// from this map is valid for every language (e.g. lint, test, semgrep, sonar).
+// It powers Validate's per-project language guard.
+var featureLanguages = map[string][]string{
+	"gofumpt":  {LangGo},
+	"gci":      {LangGo},
+	"modTidy":  {LangGo},
+	"coverage": {LangGo, LangTS},
+	"audit":    {LangTS},
+}
+
+// restrictedFeatureKeys is the deterministically-ordered set of language-restricted
+// feature keys, so Validate reports the same error for equal inputs (map iteration
+// order is not stable).
+var restrictedFeatureKeys = []string{"gofumpt", "gci", "modTidy", "coverage", "audit"}
+
+// featureAllowed reports whether a feature (by JSON key) may be enabled on the
+// given language. Unlisted features are language-agnostic.
+func featureAllowed(feature, lang string) bool {
+	langs, restricted := featureLanguages[feature]
+	if !restricted {
+		return true
+	}
+	for _, l := range langs {
+		if l == lang {
+			return true
+		}
+	}
+	return false
+}
 
 // Enabled reports whether the named feature (by its JSON key) is on. It powers
 // the per-command Gate filter in the runner.
@@ -122,6 +154,10 @@ func (f Features) Enabled(name string) bool {
 		return f.ModTidy
 	case "coverage":
 		return f.Coverage
+	case "audit":
+		return f.Audit
+	case "semgrep":
+		return f.Semgrep
 	case "sonar":
 		return f.Sonar
 	default:
@@ -260,16 +296,16 @@ func (l *Lock) Validate() error {
 		if p.Features.Diagrams && !p.Features.Markdown {
 			return fmt.Errorf("project %q: features.diagrams requires features.markdown", p.Name)
 		}
-		// Go-only verifier features and coverageMin are invalid on other languages.
-		if p.Language != LangGo {
-			for _, name := range goOnlyFeatures {
-				if p.Features.Enabled(name) {
-					return fmt.Errorf("project %q: features.%s is only valid for go projects", p.Name, name)
-				}
+		// Language-restricted verifier features are invalid on other languages.
+		for _, name := range restrictedFeatureKeys {
+			if p.Features.Enabled(name) && !featureAllowed(name, p.Language) {
+				return fmt.Errorf("project %q: features.%s is not valid for %s projects (want %s)",
+					p.Name, name, p.Language, strings.Join(featureLanguages[name], "|"))
 			}
-			if p.CoverageMin != 0 {
-				return fmt.Errorf("project %q: coverageMin is only valid for go projects", p.Name)
-			}
+		}
+		// coverageMin only applies where the coverage gate is valid.
+		if p.CoverageMin != 0 && !featureAllowed("coverage", p.Language) {
+			return fmt.Errorf("project %q: coverageMin is not valid for %s projects", p.Name, p.Language)
 		}
 		if p.CoverageMin < 0 || p.CoverageMin > 100 {
 			return fmt.Errorf("project %q: coverageMin %d out of range (want 0-100)", p.Name, p.CoverageMin)

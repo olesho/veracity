@@ -94,7 +94,7 @@ func TestValidateInvariants(t *testing.T) {
 	}
 }
 
-func TestValidateGoOnlyVerifiers(t *testing.T) {
+func TestValidateFeatureLanguageGuard(t *testing.T) {
 	// Each Go-only verifier flag on a python project must fail.
 	for _, mut := range []func(*Features){
 		func(f *Features) { f.Gofumpt = true },
@@ -106,12 +106,33 @@ func TestValidateGoOnlyVerifiers(t *testing.T) {
 			Projects: []Project{{Name: "p", Language: LangPython}}}
 		mut(&l.Projects[0].Features)
 		if err := l.Validate(); err == nil {
-			t.Errorf("expected go-only verifier on python to fail: %+v", l.Projects[0].Features)
+			t.Errorf("expected go/ts-only verifier on python to fail: %+v", l.Projects[0].Features)
 		}
 	}
 
-	// coverageMin on python must fail.
-	l := &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
+	// Go-only verifiers must also fail on a TypeScript project.
+	for _, mut := range []func(*Features){
+		func(f *Features) { f.Gofumpt = true },
+		func(f *Features) { f.Gci = true },
+		func(f *Features) { f.ModTidy = true },
+	} {
+		l := &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
+			Projects: []Project{{Name: "p", Language: LangTS}}}
+		mut(&l.Projects[0].Features)
+		if err := l.Validate(); err == nil {
+			t.Errorf("expected go-only verifier on ts to fail: %+v", l.Projects[0].Features)
+		}
+	}
+
+	// The TS-only audit verifier must fail on Go.
+	l := validLock()
+	l.Projects[0].Features.Audit = true
+	if err := l.Validate(); err == nil {
+		t.Fatal("expected audit on go to fail validation")
+	}
+
+	// coverageMin on python must fail (coverage is not valid for python).
+	l = &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
 		Projects: []Project{{Name: "p", Language: LangPython, CoverageMin: 50}}}
 	if err := l.Validate(); err == nil {
 		t.Fatal("expected coverageMin on python to fail validation")
@@ -127,7 +148,7 @@ func TestValidateGoOnlyVerifiers(t *testing.T) {
 		}
 	}
 
-	// Valid Go project with all verifiers on and a bounded coverageMin passes.
+	// Valid Go project with all Go verifiers on and a bounded coverageMin passes.
 	l = validLock()
 	l.Projects[0].Features.Gofumpt = true
 	l.Projects[0].Features.Gci = true
@@ -137,14 +158,24 @@ func TestValidateGoOnlyVerifiers(t *testing.T) {
 	if err := l.Validate(); err != nil {
 		t.Fatalf("valid go verifiers rejected: %v", err)
 	}
+
+	// Valid TypeScript project with the TS verifiers (coverage/audit/semgrep) on
+	// and a bounded coverageMin passes.
+	l = &Lock{SchemaVersion: SchemaVersion, Layout: LayoutSingle,
+		Projects: []Project{{Name: "web", Language: LangTS,
+			Features:    Features{Lint: true, Test: true, Coverage: true, Audit: true, Semgrep: true},
+			CoverageMin: 75}}}
+	if err := l.Validate(); err != nil {
+		t.Fatalf("valid ts verifiers rejected: %v", err)
+	}
 }
 
 func TestFeaturesEnabled(t *testing.T) {
-	f := Features{Lint: true, Gofumpt: true, Coverage: true}
+	f := Features{Lint: true, Gofumpt: true, Coverage: true, Audit: true, Semgrep: true}
 	cases := map[string]bool{
 		"lint": true, "test": false, "markdown": false, "diagrams": false,
 		"gofumpt": true, "gci": false, "modTidy": false, "coverage": true,
-		"unknown": false,
+		"audit": true, "semgrep": true, "sonar": false, "unknown": false,
 	}
 	for name, want := range cases {
 		if got := f.Enabled(name); got != want {

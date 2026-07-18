@@ -29,16 +29,24 @@ does all file writing. Never hand-write project files yourself.
      ask (default `example.com/<name>`) for a brand-new project.
    - **Features** per project: `lint`, `test`, `markdown` docs, `diagrams`
      (enabling diagrams enables markdown automatically).
-   - **Go-only quality verifiers** (ask only for `go` projects; all off by
+   - **Go quality verifiers** (ask only for `go` projects; all off by
      default, all on under the `full` preset): `gofumpt` (stricter formatting),
      `gci` (import ordering), `modTidy` (`go mod tidy` hygiene), and `coverage`
-     (a total-coverage gate). **If they enable `coverage`, ask for the minimum
+     (a total-coverage gate). gofumpt/gci also run in the agent edit-loop
+     (post-edit/stop hooks) so the agent auto-fixes formatting each turn via
+     `harness fmt`; modTidy/coverage run at git pre-push and in `harness ci`.
+   - **TypeScript quality/security verifiers** (ask only for `typescript`
+     projects; all off by default, all on under the `full` preset): `coverage`
+     (a `vitest --coverage` gate), `audit` (`pnpm audit` dependency scan), and
+     `semgrep` (SAST). Strict type-aware ESLint + Prettier are already baseline
+     (no flag). Run at git pre-push and in `harness ci`.
+   - **If any project enables `coverage` (Go or TS), ask for the minimum
      coverage percent** — "minimum coverage % (blank = report only)" — and put it
      in the project entry as `"coverageMin": <N>` (omit or `0` = measure and
-     report, never fail). gofumpt/gci also run in the agent edit-loop (post-edit/
-     stop hooks) so the agent auto-fixes formatting each turn via `harness fmt`;
-     modTidy/coverage run at git pre-push and in `harness ci`. Do **not** offer
-     them for python/typescript.
+     report, never fail).
+   - `semgrep` is language-agnostic (any project); it runs via Docker and
+     soft-skips when Docker is unavailable. Offer each verifier only for the
+     language(s) that support it — `harness` rejects a mismatch.
    - **Capabilities** (repo-level): which agents to wire (`claude`, `codex`, or
      none), and whether to enable `gitHooks`, `ci`, `agentDocs`, `skills`.
    - Offer the presets as shortcuts: **minimal**, **standard** (default), **full**.

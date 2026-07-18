@@ -10,8 +10,10 @@ hand-write project files.
 3. Ask: layout (single vs monorepo); per project name/language (for Go, do NOT
    ask for a module path when adopting — it is detected from `go.mod`);
    per-project features (lint/test/markdown/diagrams — diagrams implies markdown);
-   for Go projects only, the quality verifiers (gofumpt/gci/modTidy/coverage, all
-   off by default / on under `full`) — if coverage is enabled, ask the minimum
+   quality verifiers (all off by default / on under `full`) — Go:
+   gofumpt/gci/modTidy/coverage; TypeScript: coverage/audit(pnpm audit)/semgrep
+   (SAST); semgrep is any-language. TS also gets strict type-aware ESLint +
+   Prettier as baseline. If coverage is enabled (Go or TS), ask the minimum
    coverage percent and set `"coverageMin": <N>` (blank/0 = report only); repo
    capabilities (agents claude/codex/none, gitHooks, ci, agentDocs, skills).
    Offer presets minimal/standard/full.

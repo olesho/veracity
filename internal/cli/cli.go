@@ -173,14 +173,27 @@ func cmdDoctor(out io.Writer) int {
 				fmt.Fprintln(out, "  note: sonar scans soft-skip (WARN, no failure) until all three are present")
 			}
 		}
+		// Semgrep runs via Docker — probe non-fatally like Sonar.
+		if anyFeature(lock, "semgrep") {
+			s := runner.ProbeSemgrep()
+			fmt.Fprintln(out, "\nsemgrep (docker):")
+			if s.DockerOK {
+				fmt.Fprintf(out, "  ok    docker (image %s)\n", s.Image)
+			} else {
+				fmt.Fprintln(out, "  MISS  docker; semgrep scans soft-skip (WARN, no failure) until docker is present")
+			}
+		}
 	}
 	return 0
 }
 
 // anySonar reports whether any project in the lock enables the sonar verifier.
-func anySonar(lock *lockfile.Lock) bool {
+func anySonar(lock *lockfile.Lock) bool { return anyFeature(lock, "sonar") }
+
+// anyFeature reports whether any project enables the named feature (JSON key).
+func anyFeature(lock *lockfile.Lock, feature string) bool {
 	for _, p := range lock.Projects {
-		if p.Features.Sonar {
+		if p.Features.Enabled(feature) {
 			return true
 		}
 	}
@@ -275,7 +288,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	// The project name is the first argument so that flags may follow it (Go's
 	// flag package stops at the first positional, so we peel the name off first).
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N] [--sonar on|off]")
+		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N] [--audit on|off] [--semgrep on|off] [--sonar on|off]")
 		return 2
 	}
 	name := args[0]
@@ -289,8 +302,10 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	gofumpt := fs.String("gofumpt", "", "on|off (Go)")
 	gci := fs.String("gci", "", "on|off (Go)")
 	modTidy := fs.String("mod-tidy", "", "on|off (Go)")
-	coverage := fs.String("coverage", "", "on|off (Go)")
-	coverageMin := fs.Int("coverage-min", 0, "minimum total coverage percent 0-100 (Go)")
+	coverage := fs.String("coverage", "", "on|off (Go, TypeScript)")
+	coverageMin := fs.Int("coverage-min", 0, "minimum total coverage percent 0-100 (Go, TypeScript)")
+	audit := fs.String("audit", "", "on|off (TypeScript; pnpm audit)")
+	semgrep := fs.String("semgrep", "", "on|off (Semgrep SAST; any language)")
 	sonar := fs.String("sonar", "", "on|off (SonarQube scan; any language)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
@@ -307,7 +322,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 		Features: setup.FeaturesInput{
 			Lint: onOff(*lint), Test: onOff(*test), Markdown: onOff(*markdown), Diagrams: onOff(*diagrams),
 			Gofumpt: onOff(*gofumpt), Gci: onOff(*gci), ModTidy: onOff(*modTidy), Coverage: onOff(*coverage),
-			Sonar: onOff(*sonar),
+			Audit: onOff(*audit), Semgrep: onOff(*semgrep), Sonar: onOff(*sonar),
 		},
 		CoverageMin: covMin,
 	}
