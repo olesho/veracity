@@ -40,6 +40,7 @@ func TestSemgrepDisabled(t *testing.T) {
 // PATH — the graceful-degradation contract for the Docker-based scan.
 func TestSemgrepSoftSkipNoDocker(t *testing.T) {
 	lock, proj := semgrepLock()
+	t.Setenv("CI", "")            // exercise the docker path even when the suite runs on CI
 	t.Setenv("PATH", t.TempDir()) // an empty dir: docker is not resolvable
 	var out bytes.Buffer
 	if err := Semgrep(t.TempDir(), lock, proj, &out); err != nil {
@@ -48,5 +49,19 @@ func TestSemgrepSoftSkipNoDocker(t *testing.T) {
 	s := out.String()
 	if !strings.Contains(s, "WARN") || !strings.Contains(s, "skipping") {
 		t.Errorf("expected a WARN skip, got: %q", s)
+	}
+}
+
+// On a CI runner (CI=true) an enabled semgrep verifier is skipped without
+// invoking Docker, so the gate stays fast; it still runs locally.
+func TestSemgrepSkipInCI(t *testing.T) {
+	lock, proj := semgrepLock()
+	t.Setenv("CI", "true")
+	var out bytes.Buffer
+	if err := Semgrep(t.TempDir(), lock, proj, &out); err != nil {
+		t.Fatalf("Semgrep should skip (nil) on CI, got: %v", err)
+	}
+	if !strings.Contains(out.String(), "skipped on CI") {
+		t.Errorf("expected a 'skipped on CI' notice, got: %q", out.String())
 	}
 }

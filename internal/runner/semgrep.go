@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 
 	"github.com/olesho/harness/internal/lockfile"
@@ -22,6 +23,15 @@ const semgrepImage = "semgrep/semgrep"
 func Semgrep(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Writer) error {
 	if !proj.Features.Semgrep {
 		fmt.Fprintf(out, "NOTICE [%s] semgrep disabled\n", proj.Name)
+		return nil
+	}
+
+	// Semgrep is heavy on CI (pulls a container, downloads the auto ruleset, and
+	// scans the whole tree with no caching). Skip it on CI runners so the gate
+	// stays fast; it still runs locally through the git hooks and manual
+	// `harness ci`. CI systems set CI=true by convention.
+	if isCI() {
+		fmt.Fprintf(out, "NOTICE [%s] semgrep skipped on CI (runs locally)\n", proj.Name)
 		return nil
 	}
 
@@ -53,6 +63,15 @@ func Semgrep(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Wri
 	}
 	fmt.Fprintf(out, "NOTICE [%s] semgrep scan complete\n", proj.Name)
 	return nil
+}
+
+// isCI reports whether we appear to be running on a CI runner, via the
+// conventional CI environment variable (set to a truthy value by GitHub
+// Actions and most other CI systems). Local shells and git hooks leave it
+// unset, so the semgrep scan still runs there.
+func isCI() bool {
+	v := os.Getenv("CI")
+	return v != "" && v != "false" && v != "0"
 }
 
 // SemgrepStatus is a non-fatal snapshot of Semgrep availability, used by
