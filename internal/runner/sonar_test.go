@@ -54,6 +54,7 @@ func TestSonarDisabled(t *testing.T) {
 // reached — the graceful-degradation contract for a heavy optional service.
 func TestSonarSoftSkipUnreachable(t *testing.T) {
 	lock, proj := singleGoLock()
+	t.Setenv("CI", "") // exercise the reachability path even when the suite runs on CI
 	t.Setenv("SONAR_TOKEN", "dummy-token")
 	t.Setenv("SONAR_HOST_URL", "http://127.0.0.1:1") // nothing listens here
 	var out bytes.Buffer
@@ -63,5 +64,24 @@ func TestSonarSoftSkipUnreachable(t *testing.T) {
 	s := out.String()
 	if !strings.Contains(s, "WARN") || !strings.Contains(s, "skipping") {
 		t.Errorf("expected a WARN skip, got: %q", s)
+	}
+}
+
+// On a CI runner (CI=true) an enabled sonar verifier is skipped entirely — the
+// self-hosted server is unreachable from remote CI, so the scan is local-only by
+// design. It must not even probe the server or invoke Docker.
+func TestSonarSkipInCI(t *testing.T) {
+	lock, proj := singleGoLock()
+	t.Setenv("CI", "true")
+	// Point at a would-be-reachable-looking config to prove CI short-circuits
+	// before any probe: if the guard were missing this would try 127.0.0.1:1.
+	t.Setenv("SONAR_TOKEN", "dummy-token")
+	t.Setenv("SONAR_HOST_URL", "http://127.0.0.1:1")
+	var out bytes.Buffer
+	if err := Sonar(t.TempDir(), lock, proj, &out); err != nil {
+		t.Fatalf("Sonar should skip (nil) on CI, got: %v", err)
+	}
+	if !strings.Contains(out.String(), "skipped on CI") {
+		t.Errorf("expected a 'skipped on CI' notice, got: %q", out.String())
 	}
 }

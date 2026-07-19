@@ -25,9 +25,11 @@ harness setup --config setup.json
 ## SonarQube scanning (optional)
 
 Enabling the `sonar` feature (`harness edit <name> --confirm <name> --sonar on`)
-seeds a `sonar-project.properties` and runs a SonarQube scan on `pre-push` and in
-`harness ci`. SonarQube is a heavy, self-hosted service you install yourself; the
-harness never provisions it. The scan reads:
+seeds a `sonar-project.properties` and runs a SonarQube scan **locally only** — on
+the `pre-push` git hook and on a local `harness ci`. The server is self-hosted and
+reachable only from your machine, so the scan is **skipped on remote CI runners**
+(anything with `CI=true`, e.g. GitHub Actions). SonarQube is a heavy service you
+install yourself; the harness never provisions it. The scan reads:
 
 - `SONAR_HOST_URL` — defaults to `http://localhost:9000`.
 - `SONAR_TOKEN` — a **local** API credential (SonarQube UI → My Account →

@@ -15,9 +15,9 @@ repository settings, add a branch protection rule (or ruleset) for your default
 branch and mark the `harness-ci` check **Required**. Until you do, a red CI run
 does not block merges.
 
-## SonarQube in CI (optional)
+## SonarQube is local-only (not run in CI)
 
-If the `sonar` feature is enabled, `harness ci` attempts a SonarQube scan. It
-needs a reachable server (`SONAR_HOST_URL`) and a `SONAR_TOKEN` in the runner's
-environment. When either is absent, the scan **soft-skips** (warns, does not
-fail), so CI stays green even where the self-hosted server isn't reachable.
+The `sonar` verifier targets a **self-hosted** SonarQube reachable only from a
+developer's machine, so it is **skipped on CI runners** (detected via `CI=true`).
+It runs on the local `pre-push` hook and on a local `harness ci` invocation only —
+remote CI never attempts a scan, and CI stays green regardless.

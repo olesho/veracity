@@ -38,6 +38,16 @@ func Sonar(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Write
 		return nil
 	}
 
+	// SonarQube is a self-hosted server reachable only from the local machine; a
+	// remote CI runner cannot reach it (and holds no token). Skip explicitly on
+	// CI so the scan is local-only by design — via the git hooks and local
+	// `harness ci` — rather than merely soft-skipped by an unreachable-server
+	// probe. CI systems set CI=true by convention.
+	if isCI() {
+		fmt.Fprintf(out, "NOTICE [%s] sonar skipped on CI (runs locally)\n", proj.Name)
+		return nil
+	}
+
 	if _, err := exec.LookPath("docker"); err != nil {
 		fmt.Fprintf(out, "WARN [%s] sonar: docker not on PATH; skipping\n", proj.Name)
 		return nil
