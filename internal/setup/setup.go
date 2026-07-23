@@ -60,7 +60,7 @@ func Init(root string, in *Input, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return execute(root, lock, files)
+	return execute(root, lock, files, false)
 }
 
 // hasForeignFiles reports whether root contains any entry other than .git and

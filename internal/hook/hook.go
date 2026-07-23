@@ -20,6 +20,7 @@ import (
 	"github.com/olesho/veracity/internal/gitq"
 	"github.com/olesho/veracity/internal/lockfile"
 	"github.com/olesho/veracity/internal/runner"
+	"github.com/olesho/veracity/internal/setup"
 	"github.com/olesho/veracity/internal/version"
 )
 
@@ -179,12 +180,39 @@ func runStop(root string, stdin io.Reader, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "veracity: check issues in files changed this session:\n\n%s\nRun `veracity fmt` to auto-fix formatting/imports, then fix anything left, before finishing.\n", buf.String())
 		return 2
 	}
+	// Managed-wiring drift net: hooks/, .claude/, .codex/, CI and agent docs are
+	// veracity's to own. Editing them is silently ineffective, so block on it here
+	// rather than letting the edit ride until CI.
+	if msg := driftMessage(root); msg != "" {
+		fmt.Fprint(stderr, msg)
+		return 2
+	}
 	// Non-blocking nudge: if diagrams are enabled and prose summaries are stale
 	// for changed projects, tell the agent to refresh them via the skill.
 	if note := staleSummaryNote(root, lock, groups); note != "" {
 		fmt.Fprintln(stderr, note)
 	}
 	return 0
+}
+
+// driftMessage returns a blocking message when the project no longer matches its
+// lock (managed wiring edited or deleted, missing lint config, unregistered
+// project dir, ...), or "" when it verifies clean. Only FAIL-level issues are
+// reported; NOTICE/WARN are informational and must not block.
+func driftMessage(root string) string {
+	res, err := setup.Verify(root)
+	if err != nil || res.OK() {
+		return "" // unreadable manifest/lock is not the agent's problem to solve
+	}
+	var b strings.Builder
+	b.WriteString("veracity: this project no longer matches veracity.lock.json:\n\n")
+	for _, i := range res.Issues {
+		if i.Level == setup.LevelFail {
+			fmt.Fprintf(&b, "  - %s\n", i.Message)
+		}
+	}
+	b.WriteString("\nFix the above before finishing. Veracity-managed wiring cannot be hand-edited — your change will not take effect.\n")
+	return b.String()
 }
 
 // staleSummaryNote returns a one-line, non-blocking message when a diagrams
@@ -243,6 +271,12 @@ func runGitGate(root string, stderr io.Writer, test bool) int {
 	lock, ok := loadLock(root)
 	if !ok {
 		return 0
+	}
+	// Drift gate, matching `veracity ci`: the tree must match its lock before the
+	// slower lint/test phases are worth running.
+	if msg := driftMessage(root); msg != "" {
+		fmt.Fprint(stderr, msg)
+		return 1
 	}
 	failed := false
 	for _, proj := range lock.Projects {

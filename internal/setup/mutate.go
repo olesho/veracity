@@ -107,7 +107,7 @@ func Add(root string, in *Input) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return execute(root, lock, files)
+	return execute(root, lock, files, false)
 }
 
 // EditInput carries the mutable per-project settings `veracity edit` changes.
@@ -188,7 +188,7 @@ func Edit(root, name, confirm string, in EditInput) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return execute(root, lock, files)
+	return execute(root, lock, files, false)
 }
 
 // Reconfigure changes repo-level capabilities after setup and reconciles the
@@ -227,7 +227,24 @@ func Reconfigure(root string, changes CapsInput) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return execute(root, lock, files)
+	return execute(root, lock, files, false)
+}
+
+// Restore rewrites every veracity-managed wiring file from the generated content,
+// discarding local edits and recreating any that were deleted. It is the remedy
+// the drift gates point at: managed wiring is veracity's to own, so restoring it
+// is always safe. Project source, native lint config, and generated docs are
+// Owned and never touched.
+func Restore(root string) (*Result, error) {
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	files, err := Render(filepath.Base(mustAbs(root)), lock, false)
+	if err != nil {
+		return nil, err
+	}
+	return execute(root, lock, files, true)
 }
 
 // Remove unregisters a project. It refuses while the project directory still

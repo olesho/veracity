@@ -187,11 +187,13 @@ func verifyManagedFiles(root string, m *ownership.Manifest, res *VerifyResult) {
 		}
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
-			res.add(LevelFail, "managed file %s is missing", rel)
+			res.add(LevelFail, "managed file %s is missing — run `veracity restore` to regenerate it", rel)
 			continue
 		}
 		if ownership.Hash(data) != entry.Hash {
-			res.add(LevelWarn, "managed file %s has drifted from its generated content", rel)
+			// Managed wiring is veracity's to own: a local edit is drift, not a
+			// preference. FAIL (not WARN) so the hooks and CI actually stop it.
+			res.add(LevelFail, "managed file %s was edited by hand; veracity owns it and will not honor the change — run `veracity restore` to discard the edit, or `git checkout -- %s`", rel, rel)
 		}
 	}
 }

@@ -65,6 +65,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdHook(rest, stdin, stdout, stderr)
 	case "repair":
 		return cmdRepair(stdout, stderr)
+	case "restore":
+		return cmdRestore(stdout, stderr)
 	case "install-skills":
 		return cmdInstallSkills(stdout, stderr)
 	case "install-tools":
@@ -486,6 +488,19 @@ func cmdReconfigure(args []string, out, errw io.Writer) int {
 // isFlag reports whether an argument looks like a flag (leading '-').
 func isFlag(s string) bool { return len(s) > 0 && s[0] == '-' }
 
+// cmdRestore rewrites veracity-managed wiring from the generated content,
+// discarding local edits. It is the remedy the drift gates (Stop hook, git
+// pre-commit/pre-push, `veracity ci`) name in their failure message.
+func cmdRestore(out, errw io.Writer) int {
+	res, err := setup.Restore(resolveRoot())
+	if err != nil {
+		fmt.Fprintf(errw, "veracity restore: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(out, "restore: %d restored, %d created, %d unchanged\n", res.Restored, res.Created, res.Skipped)
+	return 0
+}
+
 func cmdRepair(out, errw io.Writer) int {
 	if err := txn.Repair(resolveRoot()); err != nil {
 		fmt.Fprintf(errw, "veracity repair: %v\n", err)
@@ -567,6 +582,7 @@ setup & lifecycle:
   reconfigure  toggle repo capabilities (reconfigure --ci on --skills off --codex on ...)
   remove       unregister a project (remove <name> --confirm <name> [--archive])
   verify       check the working tree matches veracity.lock.json
+  restore      rewrite veracity-managed wiring, discarding local edits (drift remedy)
   repair       heal an interrupted transaction
 
 enforcement:

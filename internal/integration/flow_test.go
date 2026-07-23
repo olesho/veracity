@@ -108,6 +108,98 @@ func TestSingleGoFullFlow(t *testing.T) {
 	}
 }
 
+// TestManagedDriftIsGatedAndRestorable is the end-to-end example for the drift
+// gate: hand-editing (or deleting) veracity-managed wiring must fail `verify`,
+// block the agent Stop hook and the git pre-commit/pre-push gates, and be
+// repairable with `veracity restore`.
+//
+// Lint/test are off so the Stop hook reaches the drift gate without depending on
+// analyzer resolution — the only thing under test here is drift.
+func TestManagedDriftIsGatedAndRestorable(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+
+	cfg := `{"layout":"single","capabilities":{"agents":["claude"],"gitHooks":true},` +
+		`"projects":[{"name":"demo","language":"go","modulePath":"example.com/demo",` +
+		`"features":{"lint":false,"test":false}}]}`
+	if code, _, e := run(t, cfg, "setup", "--config", "-"); code != 0 {
+		t.Fatalf("setup failed (%d): %s", code, e)
+	}
+
+	const managed = "hooks/post-edit.sh"
+	full := filepath.Join(root, filepath.FromSlash(managed))
+	generated, err := os.ReadFile(full)
+	if err != nil {
+		t.Fatalf("reading managed file: %v", err)
+	}
+
+	// Baseline: a freshly generated project verifies clean and does not block.
+	if code, o, e := run(t, "", "verify"); code != 0 {
+		t.Fatalf("baseline verify failed (%d): %s%s", code, o, e)
+	}
+	stopIn := `{"session_id":"s1","stop_hook_active":false}`
+	if code, _, e := run(t, stopIn, "hook", "stop", "--agent", "claude"); code != 0 {
+		t.Fatalf("baseline stop hook should pass, got %d: %s", code, e)
+	}
+
+	// Drift it, the way an agent "helpfully" would.
+	if err := os.WriteFile(full, append(generated, []byte("\necho tampered\n")...), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. verify now FAILs and names the remedy.
+	code, o, e := run(t, "", "verify")
+	if code == 0 {
+		t.Fatalf("verify must fail on managed drift; got 0: %s%s", o, e)
+	}
+	if !strings.Contains(o+e, "veracity restore") {
+		t.Errorf("verify message must name the remedy, got: %s%s", o, e)
+	}
+
+	// 2. The agent Stop hook blocks with exit 2 (the block-with-feedback contract).
+	code, _, e = run(t, stopIn, "hook", "stop", "--agent", "claude")
+	if code != 2 {
+		t.Fatalf("stop hook must block on drift with 2, got %d: %s", code, e)
+	}
+	if !strings.Contains(e, managed) || !strings.Contains(e, "veracity restore") {
+		t.Errorf("stop message must name the file and remedy, got: %s", e)
+	}
+
+	// 3. Both git gates abort.
+	for _, ev := range []string{"pre-commit", "pre-push"} {
+		if code, _, e := run(t, "", "hook", ev); code != 1 {
+			t.Errorf("%s must abort on drift with 1, got %d: %s", ev, code, e)
+		}
+	}
+
+	// 4. restore repairs it, and the gates go quiet again.
+	if code, o, e := run(t, "", "restore"); code != 0 {
+		t.Fatalf("restore failed (%d): %s%s", code, o, e)
+	}
+	got, err := os.ReadFile(full)
+	if err != nil || !bytes.Equal(got, generated) {
+		t.Fatalf("restore must rewrite the generated content; got %q", got)
+	}
+	if code, o, e := run(t, "", "verify"); code != 0 {
+		t.Fatalf("verify must pass after restore (%d): %s%s", code, o, e)
+	}
+	if code, _, e := run(t, stopIn, "hook", "stop", "--agent", "claude"); code != 0 {
+		t.Fatalf("stop hook must pass after restore, got %d: %s", code, e)
+	}
+
+	// 5. A deleted managed file is caught too, and restore recreates it.
+	if err := os.Remove(full); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, _ := run(t, "", "verify"); code == 0 {
+		t.Error("verify must fail when a managed file is deleted")
+	}
+	if code, _, e := run(t, "", "restore"); code != 0 {
+		t.Fatalf("restore after delete failed (%d): %s", code, e)
+	}
+	mustExist(t, root, managed)
+}
+
 // TestAdoptExistingGoProject adopts a pre-existing Go project: veracity must
 // detect the real module path, NOT inject the sample module, and pass verify.
 func TestAdoptExistingGoProject(t *testing.T) {

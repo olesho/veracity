@@ -201,6 +201,70 @@ project's own `package.json` (veracity adds `@vitest/coverage-v8`), not the
   **Danger JS** — will be generated as standalone workflow jobs (they can't run
   inside `veracity ci`); not implemented yet.
 
+## What agents are told (signals, not context)
+
+veracity puts **nothing** in an agent's context up front. There is no preamble, no
+always-loaded instruction block, no session briefing — the `session-start` hook
+records the HEAD ref and prints nothing at all. Agents explore the project the
+normal way; veracity speaks only when something breaks.
+
+Every signal is a hook exit code plus a message on stderr, and each one is shaped
+for one of exactly two recovery paths:
+
+1. **The error explains itself → the agent just fixes it.** Lint, formatting,
+   type, test, coverage, and security-scan failures carry the underlying tool's
+   own output plus a concrete next command. No skill, no extra context.
+2. **The error names a skill → the agent loads that skill, which handles it.**
+   Reserved for work an error string genuinely cannot describe — today only the
+   documentation / diagram prose flow (`veracity-docs`).
+
+### Signals implemented today
+
+| When | Trigger | Signal | Path |
+|---|---|---|---|
+| post-edit | lint / `gofumpt` / `gci` fail on the file just edited | exit 2 + stderr, blocks the turn | (1) — names `veracity fmt` |
+| post-edit | installed binary ≠ `.veracity-version` pin | stderr warning, non-blocking | (1) — carries the exact `go install` line |
+| Stop | lint / format fail on any file changed this session | exit 2 + stderr, blocks | (1) |
+| Stop | **managed wiring hand-edited or deleted** | exit 2 + stderr, blocks | (1) — names `veracity restore` |
+| Stop | diagram prose stale for a changed project | stderr note, non-blocking | (2) — names the `veracity-docs` skill |
+| pre-commit | pin mismatch, **drift**, then lint | exit 1, git aborts | (1) |
+| pre-push | pin mismatch, **drift**, tests + enabled verifiers (`gofumpt`, `gci`, `modTidy`, `coverage`, `audit`, `semgrep`, `sonar`) | exit 1, git aborts | (1) |
+| `veracity ci` | verify + lint + test + all enabled verifiers | job failure | (1) |
+
+Path (2) covers exactly one case, and only when the user has enabled `diagrams`
+**and** `skills`. Everything else is path (1): a string the model can act on
+directly, with no skill load and no context cost.
+
+### Managed-wiring drift
+
+`hooks/`, `.claude/`, `.codex/`, the generated CI workflow, and the agent docs are
+**veracity's to own**. Editing them by hand is silently ineffective — the next
+reconcile would side-file the change — so drift is a `FAIL`, enforced at all three
+tiers (agent Stop hook, git pre-commit/pre-push, and `veracity ci`).
+
+The remedy is named in the failure message and is always safe, because managed
+wiring is generated content:
+
+```sh
+veracity restore     # rewrite managed wiring from the generated content
+```
+
+`restore` discards local edits to managed files and recreates deleted ones. Your
+source, `go.mod`, native lint config, and generated docs are Owned — it never
+touches them. To keep a change to managed wiring, change the thing that generates
+it (`veracity edit` / `veracity reconfigure`) rather than the file.
+
+### Known gaps (things that break silently)
+
+Listed so the intent is explicit rather than assumed:
+
+- **Structural doc regeneration failures are discarded.** The Stop hook calls
+  `docgen.Render(..., io.Discard)` and ignores the returned error, so a docs build
+  that fails is completely silent.
+- **Unreconciled `<file>.veracity-new` side files are never re-surfaced.** A
+  reconcile that hits a locally-modified managed file writes one and reports it at
+  that moment; nothing mentions it again afterward.
+
 ## Concepts
 
 - **One published CLI, clean projects.** The binary embeds templates, wiring, extractors, and the toolchain
@@ -208,6 +272,9 @@ project's own `package.json` (veracity adds `@vitest/coverage-v8`), not the
   language config, generated docs, and thin declarative wiring.
 - **Lightweight by construction.** A tiny mandatory core (`veracity.lock.json` + `.veracity-version`); every
   other capability (agents, git hooks, CI, docs, skills) is opt-in and generated only when enabled.
+- **Zero context by default.** veracity never preloads an agent's context. It communicates only by failing a
+  hook with an actionable message — self-explanatory for code issues, or naming a skill for the rare flow
+  (docs/diagrams) that needs one.
 - **Tiered enforcement.** Agent hooks (fast in-loop feedback) → native git hooks (universal local backstop)
   → CI (authoritative), all calling the same `veracity` logic.
 

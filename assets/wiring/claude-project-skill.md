@@ -11,7 +11,10 @@ This repo is managed by the `veracity` CLI (pinned in `.veracity-version`).
 - **Lint / test**: `veracity lint`, `veracity test` (a project, or all).
 - **Docs**: `veracity docs markdown` (structural, auto on Stop); `veracity docs diagrams <project>` (architecture SVG, manual — uses an LLM to write module/interface prose).
 - **Grow** (monorepo): `veracity add`. **Toggle features**: `veracity edit <name> --confirm <name>`.
-- **Upgrade** the pinned veracity + reconcile managed wiring: `veracity upgrade`.
+- **Restore** managed wiring after a hand-edit: `veracity restore`.
 
 Do not hand-edit files under `hooks/`, `.claude/`, or `.codex/` — veracity manages
-them. Your source and native lint config are yours to edit.
+them, and the Stop hook and git gates now **block** on drift. If you edited one,
+run `veracity restore` to discard the edit; to change wiring for real, change what
+generates it (`veracity edit` / `veracity reconfigure`). Your source and native lint
+config are yours to edit.

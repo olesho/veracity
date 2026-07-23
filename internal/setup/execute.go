@@ -18,6 +18,9 @@ type Result struct {
 	Conflicts []string
 	// Created/Replaced/Skipped/Pruned counts for reporting.
 	Created, Replaced, Skipped, Pruned int
+	// Restored counts managed files whose local edits were discarded and
+	// rewritten from the generated content (`veracity restore` only).
+	Restored int
 }
 
 func fileMode(rel string) os.FileMode {
@@ -37,7 +40,11 @@ func readIfExists(root, rel string) []byte {
 
 // execute applies the rendered file set plus the manifest, .veracity-version, and
 // lock (commit point) in a single transaction, honoring ownership rules.
-func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, error) {
+//
+// forceManaged makes a locally-modified managed file be overwritten rather than
+// side-filed — the deliberate "discard my edits and restore the generated
+// content" path behind `veracity restore`. Owned files are never forced.
+func execute(root string, lock *lockfile.Lock, files []renderFile, forceManaged bool) (*Result, error) {
 	manifest, err := ownership.Load(root)
 	if err != nil {
 		return nil, err
@@ -92,6 +99,15 @@ func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, err
 			// Owned file already present — leave the user's copy untouched.
 			res.Skipped++
 		case ownership.Conflict:
+			if forceManaged {
+				// Restore: the caller explicitly asked to discard local edits.
+				if err := tx.Write(f.Rel, f.Content, fileMode(f.Rel), false); err != nil {
+					return nil, err
+				}
+				manifest.Set(f.Rel, ownership.Managed, f.Content)
+				res.Restored++
+				break
+			}
 			// Managed file was edited locally — never clobber; drop a side file.
 			if err := tx.Write(f.Rel+".veracity-new", f.Content, fileMode(f.Rel), false); err != nil {
 				return nil, err
