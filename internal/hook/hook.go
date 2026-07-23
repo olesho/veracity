@@ -1,5 +1,5 @@
-// Package hook implements the harness hook entry point invoked by the thin
-// per-agent shims (`harness hook <event> --agent <host>`) and the native git
+// Package hook implements the veracity hook entry point invoked by the thin
+// per-agent shims (`veracity hook <event> --agent <host>`) and the native git
 // delegates. The heavy logic lives here, shared across Claude and Codex, which
 // expose near-identical contracts (PostToolUse/Stop, exit 2 + stderr to block
 // with feedback). PostToolUse is a fast single-file optimization; the Stop scan
@@ -15,12 +15,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/olesho/harness/internal/docgen"
-	"github.com/olesho/harness/internal/fileset"
-	"github.com/olesho/harness/internal/gitq"
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/runner"
-	"github.com/olesho/harness/internal/version"
+	"github.com/olesho/veracity/internal/docgen"
+	"github.com/olesho/veracity/internal/fileset"
+	"github.com/olesho/veracity/internal/gitq"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/runner"
+	"github.com/olesho/veracity/internal/version"
 )
 
 // Event names accepted by Run.
@@ -66,7 +66,7 @@ func Run(event, host, root string, stdin io.Reader, stdout, stderr io.Writer) in
 	case EventPrePush:
 		return runGitGate(root, stderr, true)
 	default:
-		fmt.Fprintf(stderr, "harness hook: unknown event %q\n", event)
+		fmt.Fprintf(stderr, "veracity hook: unknown event %q\n", event)
 		return 2
 	}
 }
@@ -123,7 +123,7 @@ func runPostEdit(root string, stdin io.Reader, stderr io.Writer) int {
 	}
 	var buf bytes.Buffer
 	if err := runner.FileChecks(root, lock, proj, files, &buf); err != nil {
-		fmt.Fprintf(stderr, "harness: checks failed for the file you just edited:\n\n%s\nRun `harness fmt` to auto-fix formatting/imports, then address anything left, before continuing.\n", buf.String())
+		fmt.Fprintf(stderr, "veracity: checks failed for the file you just edited:\n\n%s\nRun `veracity fmt` to auto-fix formatting/imports, then address anything left, before continuing.\n", buf.String())
 		return 2 // block with feedback (the model self-corrects this turn)
 	}
 	return 0
@@ -176,7 +176,7 @@ func runStop(root string, stdin io.Reader, stderr io.Writer) int {
 	_, _ = docgen.Render(root, lock, true, false, io.Discard)
 
 	if failed {
-		fmt.Fprintf(stderr, "harness: check issues in files changed this session:\n\n%s\nRun `harness fmt` to auto-fix formatting/imports, then fix anything left, before finishing.\n", buf.String())
+		fmt.Fprintf(stderr, "veracity: check issues in files changed this session:\n\n%s\nRun `veracity fmt` to auto-fix formatting/imports, then fix anything left, before finishing.\n", buf.String())
 		return 2
 	}
 	// Non-blocking nudge: if diagrams are enabled and prose summaries are stale
@@ -209,7 +209,7 @@ func staleSummaryNote(root string, lock *lockfile.Lock, groups map[string][]stri
 	if pending == 0 {
 		return ""
 	}
-	return fmt.Sprintf("harness: %d diagram summary/description item(s) are stale in %v — run the harness-docs skill to refresh prose (optional).", pending, names)
+	return fmt.Sprintf("veracity: %d diagram summary/description item(s) are stale in %v — run the veracity-docs skill to refresh prose (optional).", pending, names)
 }
 
 func runSessionStart(root string, stdin io.Reader) int {
@@ -223,7 +223,7 @@ func runSessionStart(root string, stdin io.Reader) int {
 	if err != nil {
 		return 0
 	}
-	dir := filepath.Join(root, ".harness")
+	dir := filepath.Join(root, ".veracity")
 	_ = os.MkdirAll(dir, 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "session-"+sanitize(in.SessionID)), []byte(repo.HeadRef()+"\n"), 0o644)
 	return 0

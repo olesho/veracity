@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // ignoredSegments are path segments whose subtrees never contain first-party
@@ -26,7 +26,7 @@ var ignoredSegments = map[string]bool{
 	"testdata":      true,
 	"__pycache__":   true,
 	".git":          true,
-	".harness":      true,
+	".veracity":     true,
 	".docgen-cache": true,
 	"archived":      true,
 }

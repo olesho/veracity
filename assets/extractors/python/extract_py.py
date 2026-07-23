@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Harness Python extractor (stdlib-only).
+"""Veracity Python extractor (stdlib-only).
 
 Reads a JSON request on stdin: {"subproject","root","files":[abs paths]} and
 writes a JSON IR module list on stdout. Uses only the standard library `ast`

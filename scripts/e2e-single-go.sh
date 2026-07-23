@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# End-to-end smoke test of the single-Go flow against the *built* harness binary.
-# Builds harness, scaffolds a throwaway single-Go project, and exercises the
+# End-to-end smoke test of the single-Go flow against the *built* veracity binary.
+# Builds veracity, scaffolds a throwaway single-Go project, and exercises the
 # whole pipeline: setup → bootstrap → verify → lint → test → docs status →
 # enrich → render. Exits non-zero on any failure.
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bindir="$(mktemp -d)"
-bin="$bindir/harness"
+bin="$bindir/veracity"
 proj="$(mktemp -d)"
 trap 'rm -rf "$bindir" "$proj"' EXIT
-# Isolate the harness-managed analyzer cache so the run is self-contained.
-export HARNESS_ANALYZERS_DIR="$bindir/analyzers"
+# Isolate the veracity-managed analyzer cache so the run is self-contained.
+export VERACITY_ANALYZERS_DIR="$bindir/analyzers"
 
-echo "==> building harness"
-go build -o "$bin" "$repo/cmd/harness"
+echo "==> building veracity"
+go build -o "$bin" "$repo/cmd/veracity"
 
 echo "==> scaffolding single-Go project in $proj"
 cd "$proj"
@@ -61,7 +61,7 @@ git diff --quiet 2>/dev/null || true   # not a git repo here; fmt must simply no
 "$bin" ci
 
 echo "==> missing analyzer hard-fails ci (no silent skip)"
-rm -rf "$HARNESS_ANALYZERS_DIR"/gofumpt@*
+rm -rf "$VERACITY_ANALYZERS_DIR"/gofumpt@*
 if "$bin" ci >/dev/null 2>&1; then echo "ci should fail when gofumpt is uninstalled"; exit 1; fi
 "$bin" install-tools   # restore
 

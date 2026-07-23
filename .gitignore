@@ -1,11 +1,11 @@
-# Harness build artifacts
-/harness
+# Veracity build artifacts
+/veracity
 /dist/
 
-# Harness runtime state (transient; ignored at any depth, incl. example projects)
-**/.harness/txn/
-**/.harness/session-*
-**/.harness/lock
+# Veracity runtime state (transient; ignored at any depth, incl. example projects)
+**/.veracity/txn/
+**/.veracity/session-*
+**/.veracity/lock
 **/docs/.docgen-cache/
 
 # Go

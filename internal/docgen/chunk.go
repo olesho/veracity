@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 // Chunking thresholds. A project with more than chunkThreshold modules is split

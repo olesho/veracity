@@ -20,7 +20,7 @@ func acquireLock(path string) (*fileLock, error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("another harness operation is in progress (%s is locked)", path)
+		return nil, fmt.Errorf("another veracity operation is in progress (%s is locked)", path)
 	}
 	return &fileLock{f: f}, nil
 }

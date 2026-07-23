@@ -1,4 +1,4 @@
-// Harness TypeScript extractor (esbuild bundle, checked in).
+// Veracity TypeScript extractor (esbuild bundle, checked in).
 //
 // Reads a JSON request on stdin: {subproject, root, files:[abs paths]} and
 // writes a JSON IR module list on stdout, using the TypeScript Compiler API.

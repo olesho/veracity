@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "files": {
+    ".claude/settings.json": {
+      "hash": "38d755eec598158199d50712d7181a4277ba89ef102fc2c2fabc289d68d1e525",
+      "kind": "managed"
+    },
+    ".claude/skills/veracity-docs/SKILL.md": {
+      "hash": "b12f1d36a8a4b69ca1822398bad5666156253678205f733952c3529c389789a9",
+      "kind": "managed"
+    },
+    ".claude/skills/veracity/SKILL.md": {
+      "hash": "d183239d7406e255b982a9e4f907af010af37baedb4f149e3932d9fbcd077592",
+      "kind": "managed"
+    },
+    "hooks/post-edit.sh": {
+      "hash": "26063999f59a7d4d88949e769a97002500846a6bcf2e7141a2daff205445a3b9",
+      "kind": "managed"
+    },
+    "hooks/session-start.sh": {
+      "hash": "8e11a73bca10780debbac98bfdb212913409d2d00a897d9a2bbf60e545626747",
+      "kind": "managed"
+    },
+    "hooks/stop.sh": {
+      "hash": "a388014effda0f9133d32fd83b79b69ed555e37c36a368933aa63bc2f847bf19",
+      "kind": "managed"
+    }
+  }
+}

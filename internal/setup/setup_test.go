@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func boolp(b bool) *bool { return &b }
@@ -44,7 +44,7 @@ func TestInitGoSingleEndToEnd(t *testing.T) {
 
 	// Core + owned source + claude wiring present.
 	for _, rel := range []string{
-		"harness.lock.json", ".harness-version", ".harness/manifest.json",
+		"veracity.lock.json", ".veracity-version", ".veracity/manifest.json",
 		"go.mod", ".golangci.yml", "example/greeter.go", "example/greeter_test.go",
 		"hooks/post-edit.sh", "hooks/stop.sh", "hooks/session-start.sh",
 		".claude/settings.json", ".gitignore",
@@ -53,7 +53,7 @@ func TestInitGoSingleEndToEnd(t *testing.T) {
 			t.Errorf("expected %s to exist", rel)
 		}
 	}
-	// Clean-project assertion: no harness binary/tool source.
+	// Clean-project assertion: no veracity binary/tool source.
 	for _, rel := range []string{"cmd", "internal", "assets", "extractors-src"} {
 		if exists(t, root, rel) {
 			t.Errorf("generated project must not contain tool source %q", rel)
@@ -94,13 +94,13 @@ func TestInitMinimalFootprint(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	// Present: core + owned source.
-	for _, rel := range []string{"harness.lock.json", ".harness-version", "go.mod", ".golangci.yml"} {
+	for _, rel := range []string{"veracity.lock.json", ".veracity-version", "go.mod", ".golangci.yml"} {
 		if !exists(t, root, rel) {
 			t.Errorf("minimal: expected %s", rel)
 		}
 	}
 	// Absent: all opt-in capabilities and the manifest (no managed files).
-	for _, rel := range []string{".claude", ".codex", ".github", "hooks", "CLAUDE.md", "AGENTS.md", ".harness/manifest.json"} {
+	for _, rel := range []string{".claude", ".codex", ".github", "hooks", "CLAUDE.md", "AGENTS.md", ".veracity/manifest.json"} {
 		if exists(t, root, rel) {
 			t.Errorf("minimal: %s should not exist", rel)
 		}
@@ -235,8 +235,8 @@ func TestBootstrapReportsAnalyzers(t *testing.T) {
 	}
 	// Bootstrap must stay offline (it must not compile analyzers): an empty,
 	// isolated cache should not cause a failure — only a reminder to install.
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
-	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("VERACITY_ANALYZERS_DEV", "")
 	var out bytes.Buffer
 	if err := Bootstrap(root, &out); err != nil {
 		t.Fatalf("bootstrap should not install analyzers or fail: %v\n%s", err, out.String())

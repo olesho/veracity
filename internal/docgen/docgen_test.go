@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func goProject(t *testing.T) (string, *lockfile.Lock, lockfile.Project) {

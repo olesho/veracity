@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func singleGoLock() (*lockfile.Lock, lockfile.Project) {

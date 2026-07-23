@@ -5,16 +5,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/ownership"
-	"github.com/olesho/harness/internal/setup/txn"
-	"github.com/olesho/harness/internal/version"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/ownership"
+	"github.com/olesho/veracity/internal/setup/txn"
+	"github.com/olesho/veracity/internal/version"
 )
 
 // Result reports the outcome of a mutating operation.
 type Result struct {
 	// Conflicts lists managed files that were locally modified and therefore not
-	// overwritten; a "<file>.harness-new" side file was written for each.
+	// overwritten; a "<file>.veracity-new" side file was written for each.
 	Conflicts []string
 	// Created/Replaced/Skipped/Pruned counts for reporting.
 	Created, Replaced, Skipped, Pruned int
@@ -35,7 +35,7 @@ func readIfExists(root, rel string) []byte {
 	return b
 }
 
-// execute applies the rendered file set plus the manifest, .harness-version, and
+// execute applies the rendered file set plus the manifest, .veracity-version, and
 // lock (commit point) in a single transaction, honoring ownership rules.
 func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, error) {
 	manifest, err := ownership.Load(root)
@@ -93,7 +93,7 @@ func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, err
 			res.Skipped++
 		case ownership.Conflict:
 			// Managed file was edited locally — never clobber; drop a side file.
-			if err := tx.Write(f.Rel+".harness-new", f.Content, fileMode(f.Rel), false); err != nil {
+			if err := tx.Write(f.Rel+".veracity-new", f.Content, fileMode(f.Rel), false); err != nil {
 				return nil, err
 			}
 			res.Conflicts = append(res.Conflicts, f.Rel)
@@ -102,7 +102,7 @@ func execute(root string, lock *lockfile.Lock, files []renderFile) (*Result, err
 
 	// Prune managed files that are no longer rendered (e.g. a disabled
 	// capability). Owned files (source, native config, generated docs) are never
-	// pruned — only harness-managed wiring.
+	// pruned — only veracity-managed wiring.
 	for rel := range oldManaged {
 		if !renderedManaged[rel] {
 			tx.Delete(rel)

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/setup/txn"
-	"github.com/olesho/harness/internal/version"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/setup/txn"
+	"github.com/olesho/veracity/internal/version"
 )
 
 // resolveProject builds a lockfile.Project from a ProjectInput using the given
@@ -110,7 +110,7 @@ func Add(root string, in *Input) (*Result, error) {
 	return execute(root, lock, files)
 }
 
-// EditInput carries the mutable per-project settings `harness edit` changes.
+// EditInput carries the mutable per-project settings `veracity edit` changes.
 // Unset (nil) fields are left unchanged; --coverage-min uses a pointer so an
 // explicit 0 is distinguishable from an omitted flag.
 type EditInput struct {

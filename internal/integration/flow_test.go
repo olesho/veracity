@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/analyzers"
-	"github.com/olesho/harness/internal/cli"
+	"github.com/olesho/veracity/internal/analyzers"
+	"github.com/olesho/veracity/internal/cli"
 )
 
 func run(t *testing.T, stdin string, args ...string) (int, string, string) {
@@ -35,8 +35,8 @@ func TestSingleGoFullFlow(t *testing.T) {
 	t.Chdir(root)
 	// Isolate the analyzer cache (never touch the user's real cache) and allow the
 	// version-verified PATH fallback so lint can run offline without compiling.
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
-	t.Setenv("HARNESS_ANALYZERS_DEV", "1")
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("VERACITY_ANALYZERS_DEV", "1")
 
 	cfg := `{"layout":"single","preset":"standard","capabilities":{"agents":["claude"],"gitHooks":true,"skills":true},` +
 		`"projects":[{"name":"demo","language":"go","modulePath":"example.com/demo",` +
@@ -46,10 +46,10 @@ func TestSingleGoFullFlow(t *testing.T) {
 		t.Fatalf("setup failed (%d): %s", code, e)
 	}
 	mustExist(t, root,
-		"harness.lock.json", ".harness-version", ".harness/manifest.json",
+		"veracity.lock.json", ".veracity-version", ".veracity/manifest.json",
 		"go.mod", ".golangci.yml", "example/greeter.go",
 		"hooks/post-edit.sh", ".claude/settings.json",
-		".claude/skills/harness-docs/SKILL.md",
+		".claude/skills/veracity-docs/SKILL.md",
 	)
 
 	if code, o, e := run(t, "", "bootstrap"); code != 0 {
@@ -108,7 +108,7 @@ func TestSingleGoFullFlow(t *testing.T) {
 	}
 }
 
-// TestAdoptExistingGoProject adopts a pre-existing Go project: harness must
+// TestAdoptExistingGoProject adopts a pre-existing Go project: veracity must
 // detect the real module path, NOT inject the sample module, and pass verify.
 func TestAdoptExistingGoProject(t *testing.T) {
 	root := t.TempDir()
@@ -125,7 +125,7 @@ func TestAdoptExistingGoProject(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "example", "greeter.go")); err == nil {
 		t.Fatal("adopt must not inject the sample module")
 	}
-	mustExist(t, root, "harness.lock.json", "widget.go", ".claude/settings.json")
+	mustExist(t, root, "veracity.lock.json", "widget.go", ".claude/settings.json")
 
 	// verify must pass — the lock's modulePath was detected from go.mod.
 	if code, o, e := run(t, "", "verify"); code != 0 {
@@ -202,7 +202,7 @@ func TestToggleFeaturesAndCapabilities(t *testing.T) {
 func TestTSProjectCIAndVerifiers(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir())
 
 	cfg := `{"layout":"single","preset":"standard","capabilities":{"ci":true},` +
 		`"projects":[{"name":"web","language":"typescript","features":{"lint":true,"test":true}}]}`
@@ -264,7 +264,7 @@ func TestTSProjectCIAndVerifiers(t *testing.T) {
 		t.Fatalf("ts verifiers not persisted: %s", out)
 	}
 	// coverageMin lives in the lock file (not the lock-query projection).
-	if lb, err := os.ReadFile(filepath.Join(root, "harness.lock.json")); err != nil {
+	if lb, err := os.ReadFile(filepath.Join(root, "veracity.lock.json")); err != nil {
 		t.Fatal(err)
 	} else if !strings.Contains(string(lb), `"coverageMin": 75`) {
 		t.Errorf("coverageMin 75 not persisted to lock:\n%s", lb)

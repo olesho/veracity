@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/toolchain"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/toolchain"
 )
 
 func isolatedCache(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("HARNESS_ANALYZERS_DIR", dir)
-	t.Setenv("HARNESS_ANALYZERS_DEV", "") // force cache-only resolution
+	t.Setenv("VERACITY_ANALYZERS_DIR", dir)
+	t.Setenv("VERACITY_ANALYZERS_DEV", "") // force cache-only resolution
 	return dir
 }
 
@@ -162,8 +162,8 @@ func TestInstallSurfacesError(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("HARNESS_ANALYZERS_DIR", filepath.Join(blocker, "cache"))
-	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	t.Setenv("VERACITY_ANALYZERS_DIR", filepath.Join(blocker, "cache"))
+	t.Setenv("VERACITY_ANALYZERS_DEV", "")
 	lock := &lockfile.Lock{
 		SchemaVersion: lockfile.SchemaVersion, Layout: lockfile.LayoutSingle,
 		Projects: []lockfile.Project{{

@@ -1,7 +1,7 @@
-// Package version holds the harness build version and pin-check logic.
+// Package version holds the veracity build version and pin-check logic.
 //
-// A generated project pins an exact harness version in a committed
-// `.harness-version` file. Every entry point compares the running binary's
+// A generated project pins an exact veracity version in a committed
+// `.veracity-version` file. Every entry point compares the running binary's
 // version against that pin: hooks warn on mismatch (never block editing) while
 // CI and the git-hook delegates fail hard, so byte-identical scaffolding and
 // rendering stay reproducible across machines even though the logic lives in an
@@ -13,14 +13,14 @@ import (
 	"strings"
 )
 
-// Version is the semantic version of this harness build. It is overridden at
-// release time via -ldflags "-X github.com/olesho/harness/internal/version.Version=vX.Y.Z".
+// Version is the semantic version of this veracity build. It is overridden at
+// release time via -ldflags "-X github.com/olesho/veracity/internal/version.Version=vX.Y.Z".
 // The "0.0.0-dev" default marks an unreleased local build.
 var Version = "0.0.0-dev"
 
 // PinFileName is the committed file in a managed project that pins the exact
-// harness version the project expects.
-const PinFileName = ".harness-version"
+// veracity version the project expects.
+const PinFileName = ".veracity-version"
 
 // IsDev reports whether the running binary is an unreleased local build. Pin
 // checks are advisory for dev builds so contributors can iterate without
@@ -30,7 +30,7 @@ func IsDev() bool {
 }
 
 // Match reports whether the running binary satisfies the given pin. An empty
-// pin (no `.harness-version`) matches anything. A dev build matches any pin so
+// pin (no `.veracity-version`) matches anything. A dev build matches any pin so
 // local development is never blocked by the version gate.
 func Match(pin string) bool {
 	pin = normalize(pin)
@@ -50,8 +50,8 @@ func Mismatch(pin string) string {
 		return ""
 	}
 	return fmt.Sprintf(
-		"harness version mismatch: this project pins %s but the installed binary is %s.\n"+
-			"Install the pinned version:\n\n    go install github.com/olesho/harness/cmd/harness@%s\n",
+		"veracity version mismatch: this project pins %s but the installed binary is %s.\n"+
+			"Install the pinned version:\n\n    go install github.com/olesho/veracity/cmd/veracity@%s\n",
 		normalize(pin), Version, normalize(pin),
 	)
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 // svgEntityW is the width of consumer/implementer boxes — narrower than the

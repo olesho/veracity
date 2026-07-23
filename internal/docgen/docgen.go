@@ -12,11 +12,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/olesho/harness/internal/docgen/extract"
-	"github.com/olesho/harness/internal/docgen/ir"
-	"github.com/olesho/harness/internal/fileset"
-	"github.com/olesho/harness/internal/gitq"
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/docgen/extract"
+	"github.com/olesho/veracity/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/fileset"
+	"github.com/olesho/veracity/internal/gitq"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // ExtractProject builds the IR for one project.

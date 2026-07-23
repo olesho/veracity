@@ -1,7 +1,7 @@
-// Package toolchain is the single authority for the exact commands the harness
+// Package toolchain is the single authority for the exact commands the veracity
 // runs per language and phase. No shell script or other package hard-codes tool
 // invocations; they all resolve commands here (directly, or via the
-// `harness toolchain --language <l> --json` machine interface), so lint/format/
+// `veracity toolchain --language <l> --json` machine interface), so lint/format/
 // test rules can never disagree between the agent hooks, the git-hook delegates,
 // and CI.
 package toolchain
@@ -12,18 +12,18 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
-// FilesMode describes how a command receives the file set the harness computed.
+// FilesMode describes how a command receives the file set the veracity computed.
 type FilesMode string
 
 const (
 	// NoFiles runs the command once from the project root with no file args
 	// (project/package-oriented analyzers: go vet ./..., mypy ., tsc --noEmit).
 	NoFiles FilesMode = "none"
-	// AppendFiles appends the harness-computed, project-root-relative file list
-	// (file-oriented tools: gofmt, ruff, eslint, prettier). The harness owns
+	// AppendFiles appends the veracity-computed, project-root-relative file list
+	// (file-oriented tools: gofmt, ruff, eslint, prettier). The veracity owns
 	// discovery so the tool's own directory-walk semantics are never relied on.
 	AppendFiles FilesMode = "append"
 )
@@ -32,7 +32,7 @@ const (
 type Phase string
 
 const (
-	PhaseFormat      Phase = "format"       // rewrite in place (harness fmt --fix)
+	PhaseFormat      Phase = "format"       // rewrite in place (veracity fmt --fix)
 	PhaseFileLint    Phase = "file_lint"    // fast per-file checks (tier 1 post-edit)
 	PhaseProjectLint Phase = "project_lint" // full bundle (tiers 2-4)
 	PhaseTest        Phase = "test"         // the verifier
@@ -76,14 +76,14 @@ type Command struct {
 }
 
 // Analyzer is an external tool not declared in a project's own go.mod, acquired
-// and version-pinned by the harness. `harness install-tools` (internal/analyzers)
+// and version-pinned by the veracity. `veracity install-tools` (internal/analyzers)
 // `go install`s Module@vVersion — source integrity comes from the Go module
 // checksum database — into a per-version cache, and records the produced binary's
 // sha256 so the runner can detect a corrupted/tampered cache before executing the
 // resolved absolute path. Checksums holds upstream release-binary digests keyed by
 // GOOS/GOARCH; it is reserved for a future release-binary download path and is
 // empty today (dev builds may fall back to a version-verified PATH binary only
-// when HARNESS_ANALYZERS_DEV=1).
+// when VERACITY_ANALYZERS_DEV=1).
 type Analyzer struct {
 	Name      string
 	Module    string // go-install path, e.g. "mvdan.cc/gofumpt"
@@ -195,7 +195,7 @@ func Commands(lang string, phase Phase) []Command {
 	return specs[lang].phases[phase]
 }
 
-// Analyzers returns the harness-managed (non-lockfile) analyzers for a language.
+// Analyzers returns the veracity-managed (non-lockfile) analyzers for a language.
 func Analyzers(lang string) []Analyzer {
 	return specs[lang].analyzers
 }
@@ -215,7 +215,7 @@ func FileExtensions(lang string) []string {
 	}
 }
 
-// --- JSON machine interface (`harness toolchain --language <l> --json`) ---
+// --- JSON machine interface (`veracity toolchain --language <l> --json`) ---
 
 type commandJSON struct {
 	Argv         []string `json:"argv"`

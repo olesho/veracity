@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/olesho/harness/internal/docgen/ir"
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // EnrichInput is the JSON the agent submits: module summaries and per-interface

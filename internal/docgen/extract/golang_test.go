@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 func write(t *testing.T, root, rel, content string) {

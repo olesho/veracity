@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // defaultSonarHost is the self-hosted SonarQube endpoint assumed when
@@ -41,7 +41,7 @@ func Sonar(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Write
 	// SonarQube is a self-hosted server reachable only from the local machine; a
 	// remote CI runner cannot reach it (and holds no token). Skip explicitly on
 	// CI so the scan is local-only by design — via the git hooks and local
-	// `harness ci` — rather than merely soft-skipped by an unreachable-server
+	// `veracity ci` — rather than merely soft-skipped by an unreachable-server
 	// probe. CI systems set CI=true by convention.
 	if isCI() {
 		fmt.Fprintf(out, "NOTICE [%s] sonar skipped on CI (runs locally)\n", proj.Name)
@@ -90,7 +90,7 @@ func Sonar(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Write
 }
 
 // SonarStatus is a non-fatal snapshot of SonarQube availability, used by
-// `harness doctor` to tell the user whether an enabled sonar verifier will run.
+// `veracity doctor` to tell the user whether an enabled sonar verifier will run.
 type SonarStatus struct {
 	DockerOK  bool
 	Host      string

@@ -41,7 +41,7 @@ func TestCommitCreatesAndOverwrites(t *testing.T) {
 	if err := tx.Write("existing.txt", []byte("new"), 0o644, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Write("harness.lock.json", []byte("{}"), 0o644, true); err != nil {
+	if err := tx.Write("veracity.lock.json", []byte("{}"), 0o644, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -55,7 +55,7 @@ func TestCommitCreatesAndOverwrites(t *testing.T) {
 		t.Fatalf("overwrite = %q", v)
 	}
 	// txn dir cleaned up
-	if _, err := os.Stat(filepath.Join(root, ".harness/txn/current")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, ".veracity/txn/current")); !os.IsNotExist(err) {
 		t.Fatal("txn dir should be removed after commit")
 	}
 }
@@ -78,7 +78,7 @@ func TestFaultRepairRollsBackAndForward(t *testing.T) {
 			}
 			_ = tx.Write("created.txt", []byte("X"), 0o644, false)
 			_ = tx.Write("existing.txt", []byte("MUTATED"), 0o644, false)
-			_ = tx.Write("harness.lock.json", []byte("{lock}"), 0o644, true)
+			_ = tx.Write("veracity.lock.json", []byte("{lock}"), 0o644, true)
 			tx.FaultAfter = fault
 			if err := tx.Commit(); err != errFault {
 				t.Fatalf("expected injected fault, got %v", err)
@@ -97,7 +97,7 @@ func TestFaultRepairRollsBackAndForward(t *testing.T) {
 				if _, ok := read(t, root, "created.txt"); !ok {
 					t.Fatal("committed: created.txt should exist")
 				}
-				if _, ok := read(t, root, "harness.lock.json"); !ok {
+				if _, ok := read(t, root, "veracity.lock.json"); !ok {
 					t.Fatal("committed: lock should exist")
 				}
 			} else {
@@ -107,11 +107,11 @@ func TestFaultRepairRollsBackAndForward(t *testing.T) {
 				if _, ok := read(t, root, "created.txt"); ok {
 					t.Fatal("rollback: created.txt should be gone")
 				}
-				if _, ok := read(t, root, "harness.lock.json"); ok {
+				if _, ok := read(t, root, "veracity.lock.json"); ok {
 					t.Fatal("rollback: lock should not exist")
 				}
 			}
-			if _, err := os.Stat(filepath.Join(root, ".harness/txn/current")); !os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(root, ".veracity/txn/current")); !os.IsNotExist(err) {
 				t.Fatalf("fault %d: txn dir should be cleaned after repair", fault)
 			}
 		})
@@ -130,7 +130,7 @@ func TestTOCTOUConflict(t *testing.T) {
 	if err := tx.Write("f.txt", []byte("update"), 0o644, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Write("harness.lock.json", []byte("{}"), 0o644, true); err != nil {
+	if err := tx.Write("veracity.lock.json", []byte("{}"), 0o644, true); err != nil {
 		t.Fatal(err)
 	}
 	// Someone changes f.txt after planning but before Commit.
@@ -143,7 +143,7 @@ func TestTOCTOUConflict(t *testing.T) {
 	if v, _ := read(t, root, "f.txt"); v != "CHANGED-EXTERNALLY" {
 		t.Fatalf("f.txt = %q, want external change preserved", v)
 	}
-	if _, ok := read(t, root, "harness.lock.json"); ok {
+	if _, ok := read(t, root, "veracity.lock.json"); ok {
 		t.Fatal("lock should not be written on conflict")
 	}
 }
@@ -157,7 +157,7 @@ func TestMoveAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	tx.Move("projects/api", "archived/api")
-	_ = tx.Write("harness.lock.json", []byte("{}"), 0o644, true)
+	_ = tx.Write("veracity.lock.json", []byte("{}"), 0o644, true)
 	tx.FaultAfter = 1 // crash right after the move, before commit
 	if err := tx.Commit(); err != errFault {
 		t.Fatalf("expected fault, got %v", err)

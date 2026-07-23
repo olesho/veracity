@@ -1,4 +1,4 @@
-// Package ownership tracks which generated files the harness manages versus
+// Package ownership tracks which generated files the veracity manages versus
 // which it merely seeds and hands to the user. The committed manifest records
 // the last-generated content hash of every managed file, so regeneration can
 // tell "unchanged since I wrote it" (safe to replace) from "the user edited it"
@@ -18,7 +18,7 @@ import (
 )
 
 // RelPath of the committed manifest inside a managed repo.
-const RelPath = ".harness/manifest.json"
+const RelPath = ".veracity/manifest.json"
 
 // SchemaVersion of the manifest document.
 const SchemaVersion = 1
@@ -27,17 +27,17 @@ const SchemaVersion = 1
 type Kind string
 
 const (
-	// Managed files are authored and owned by the harness (hook shims, agent
+	// Managed files are authored and owned by the veracity (hook shims, agent
 	// wiring, CI). They are reconciled on regeneration and drift-checked by verify.
 	Managed Kind = "managed"
-	// Owned files are seeded once by the harness then owned by the user (native
+	// Owned files are seeded once by the veracity then owned by the user (native
 	// lint config). They are never overwritten after creation.
 	Owned Kind = "owned"
 )
 
 // Entry records a managed/owned file's provenance.
 type Entry struct {
-	Hash string `json:"hash"` // sha256 hex of the last content the harness wrote
+	Hash string `json:"hash"` // sha256 hex of the last content the veracity wrote
 	Kind Kind   `json:"kind"`
 }
 
@@ -127,13 +127,13 @@ type Decision int
 const (
 	// Create: the target is absent — write it.
 	Create Decision = iota
-	// Replace: a managed target is unchanged since the harness wrote it — safe
+	// Replace: a managed target is unchanged since the veracity wrote it — safe
 	// to overwrite with freshly rendered content.
 	Replace
 	// Skip: an owned target already exists — leave the user's file untouched.
 	Skip
 	// Conflict: a managed target was edited locally — do not overwrite; write a
-	// "<path>.harness-new" side file and report.
+	// "<path>.veracity-new" side file and report.
 	Conflict
 	// NoChange: a managed target already matches the freshly rendered content.
 	NoChange

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 func TestContentHashStableAndSensitive(t *testing.T) {

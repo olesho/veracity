@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/toolchain"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/toolchain"
 )
 
 func goLock() *lockfile.Lock {
@@ -105,8 +105,8 @@ func TestVerifierWrappersNoticeWhenDisabled(t *testing.T) {
 func TestFormatGateSkipsDisabledFormatters(t *testing.T) {
 	// gci/gofumpt are gated off, so PhaseFormat runs only gofmt and never tries
 	// to resolve the (uninstalled) analyzers. A well-formatted file passes.
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir()) // empty cache: resolution would fail
-	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir()) // empty cache: resolution would fail
+	t.Setenv("VERACITY_ANALYZERS_DEV", "")
 	root := t.TempDir()
 	lock := goLock() // gofumpt/gci off
 	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
@@ -120,8 +120,8 @@ func TestFormatGateSkipsDisabledFormatters(t *testing.T) {
 func TestEnabledVerifierHardFailsWhenToolMissing(t *testing.T) {
 	// gofumpt enabled but not in the (empty) cache and no dev PATH fallback →
 	// hard fail with an install hint, never a silent skip.
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir())
-	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir())
+	t.Setenv("VERACITY_ANALYZERS_DEV", "")
 	root := t.TempDir()
 	lock := goLock()
 	lock.Projects[0].Features.Gofumpt = true
@@ -138,8 +138,8 @@ func TestEnabledVerifierHardFailsWhenToolMissing(t *testing.T) {
 }
 
 func TestFileChecksWiresFormatters(t *testing.T) {
-	t.Setenv("HARNESS_ANALYZERS_DIR", t.TempDir()) // empty cache → resolution would fail
-	t.Setenv("HARNESS_ANALYZERS_DEV", "")
+	t.Setenv("VERACITY_ANALYZERS_DIR", t.TempDir()) // empty cache → resolution would fail
+	t.Setenv("VERACITY_ANALYZERS_DEV", "")
 	root := t.TempDir()
 	writeFile(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
 	writeFile(t, root, "good.go", "package app\n\nfunc Good() {}\n")

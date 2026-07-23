@@ -1,4 +1,4 @@
-# Managed by harness. Codex project hooks require a one-time trust approval:
+# Managed by veracity. Codex project hooks require a one-time trust approval:
 # run `codex` in this repo and use `/hooks` to review and trust these hooks
 # (or pass --dangerously-bypass-hook-trust in non-interactive CI).
 

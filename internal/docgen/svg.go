@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 // SVG layout constants (deterministic; text is wrapped by character count so no

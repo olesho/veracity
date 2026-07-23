@@ -1,4 +1,4 @@
-// Package setup scaffolds and reconciles harness-managed projects. It resolves a
+// Package setup scaffolds and reconciles veracity-managed projects. It resolves a
 // preset/config Input into a validated lock, renders the (capability-conditioned)
 // file set from embedded assets, and applies it transactionally while honoring
 // per-file ownership.
@@ -11,28 +11,28 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/olesho/harness/internal/gitq"
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/gitq"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // Options control setup behavior.
 type Options struct {
 	NoGit bool // do not `git init` when the target is not a repo
-	Adopt bool // proceed even if the target dir has pre-existing non-harness files
+	Adopt bool // proceed even if the target dir has pre-existing non-veracity files
 }
 
 // Init scaffolds a brand-new managed project into root. It errors if the target
 // is already initialized (a lock exists) or non-empty without --adopt.
 func Init(root string, in *Input, opts Options) (*Result, error) {
 	if lockfile.Exists(root) {
-		return nil, errors.New("already initialized: harness.lock.json exists (use `harness add`/`harness edit`)")
+		return nil, errors.New("already initialized: veracity.lock.json exists (use `veracity add`/`veracity edit`)")
 	}
 	if !opts.Adopt {
-		nonHarness, err := hasForeignFiles(root)
+		nonVeracity, err := hasForeignFiles(root)
 		if err != nil {
 			return nil, err
 		}
-		if nonHarness {
+		if nonVeracity {
 			return nil, errors.New("target directory is not empty; refusing to overwrite unmanaged files (re-run with --adopt to proceed)")
 		}
 	}
@@ -64,7 +64,7 @@ func Init(root string, in *Input, opts Options) (*Result, error) {
 }
 
 // hasForeignFiles reports whether root contains any entry other than .git and
-// the .harness state dir.
+// the .veracity state dir.
 func hasForeignFiles(root string) (bool, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -75,7 +75,7 @@ func hasForeignFiles(root string) (bool, error) {
 	}
 	for _, e := range entries {
 		switch e.Name() {
-		case ".git", ".harness":
+		case ".git", ".veracity":
 			continue
 		default:
 			return true, nil

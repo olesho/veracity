@@ -1,4 +1,4 @@
-// Package gitq wraps the git plumbing the harness needs, always using
+// Package gitq wraps the git plumbing the veracity needs, always using
 // NUL-delimited output so filenames with spaces, newlines, quotes, renames, or
 // leading dashes are handled correctly (never shell-word-split or misparsed).
 package gitq

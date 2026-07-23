@@ -5,7 +5,7 @@ package txn
 import "os"
 
 // On non-unix platforms we fall back to a best-effort lock file handle without
-// OS-level advisory locking. The harness targets macOS/Linux; this stub keeps
+// OS-level advisory locking. The veracity targets macOS/Linux; this stub keeps
 // the package buildable elsewhere.
 type fileLock struct{ f *os.File }
 

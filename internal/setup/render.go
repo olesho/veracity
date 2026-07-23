@@ -7,9 +7,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/olesho/harness/assets"
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/ownership"
+	"github.com/olesho/veracity/assets"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/ownership"
 )
 
 // renderFile is one file to place in the managed project, tagged with its
@@ -218,12 +218,12 @@ func wiringFiles(repoName string, lock *lockfile.Lock) ([]renderFile, error) {
 			return nil, err
 		}
 		if caps.Skills {
-			if err := add("wiring/claude-project-skill.md", ".claude/skills/harness/SKILL.md", ownership.Managed); err != nil {
+			if err := add("wiring/claude-project-skill.md", ".claude/skills/veracity/SKILL.md", ownership.Managed); err != nil {
 				return nil, err
 			}
 			// The docs skill is only useful when a project opts into docs.
 			if anyDocsFeature(lock) {
-				if err := add("wiring/claude-docs-skill.md", ".claude/skills/harness-docs/SKILL.md", ownership.Managed); err != nil {
+				if err := add("wiring/claude-docs-skill.md", ".claude/skills/veracity-docs/SKILL.md", ownership.Managed); err != nil {
 					return nil, err
 				}
 			}

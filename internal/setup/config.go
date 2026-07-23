@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
-// Input is the setup configuration accepted on stdin (`harness setup --config -`)
+// Input is the setup configuration accepted on stdin (`veracity setup --config -`)
 // or composed from a preset. Optional fields are pointers so a preset default
 // can fill an unspecified value while an explicit false still overrides.
 type Input struct {

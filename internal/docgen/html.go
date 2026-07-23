@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"html/template"
 
-	"github.com/olesho/harness/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/docgen/ir"
 )
 
 type htmlData struct {
@@ -135,7 +135,7 @@ var htmlTmpl = template.Must(template.New("modules").Parse(`<!doctype html>
 {{range .Interfaces}}
 <section class="iface-card">
   <h3>interface {{.Name}} <span class="path">in {{.Module}}</span></h3>
-  {{if .Description}}<p>{{.Description}}</p>{{else}}<p class="pending">(description pending — run the harness-docs skill)</p>{{end}}
+  {{if .Description}}<p>{{.Description}}</p>{{else}}<p class="pending">(description pending — run the veracity-docs skill)</p>{{end}}
   <div class="diagram">{{.SVG}}</div>
   <p class="rel"><b>Depends on it:</b> {{if .Consumers}}{{range $i, $c := .Consumers}}{{if $i}}, {{end}}<code>{{$c}}</code>{{end}}{{else}}none{{end}}</p>
   <p class="rel"><b>Implemented by:</b> {{if .Implementers}}{{range $i, $m := .Implementers}}{{if $i}}, {{end}}<code>{{$m}}</code>{{end}}{{else}}none{{end}}</p>

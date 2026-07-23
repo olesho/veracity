@@ -1,4 +1,4 @@
-// Command harness is the published CLI for developing Go/Python/TypeScript
+// Command veracity is the published CLI for developing Go/Python/TypeScript
 // software with AI coding agents. It scaffolds and manages clean projects that
 // never vendor the tool itself. See the internal/cli package for dispatch.
 package main
@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/olesho/harness/internal/cli"
+	"github.com/olesho/veracity/internal/cli"
 )
 
 func main() {

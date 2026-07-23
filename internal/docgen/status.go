@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/olesho/harness/internal/docgen/ir"
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // StatusReport is the machine-readable structure list the Claude Code agent
@@ -89,7 +89,7 @@ func (r StatusReport) JSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// EnrichTemplate returns a ready-to-fill `harness docs enrich` payload
+// EnrichTemplate returns a ready-to-fill `veracity docs enrich` payload
 // containing exactly the modules/interfaces whose prose is pending, with empty
 // strings for the agent to fill in. This removes any guesswork about the shape.
 func (r StatusReport) EnrichTemplate() ([]byte, error) {

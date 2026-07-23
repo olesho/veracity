@@ -9,11 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/olesho/harness/assets"
-	"github.com/olesho/harness/internal/docgen"
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/setup"
-	"github.com/olesho/harness/internal/toolchain"
+	"github.com/olesho/veracity/assets"
+	"github.com/olesho/veracity/internal/docgen"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/setup"
+	"github.com/olesho/veracity/internal/toolchain"
 )
 
 func lookPath(name string) (string, error) { return exec.LookPath(name) }
@@ -40,7 +40,7 @@ func onOff(v string) *bool {
 
 func reportConflicts(res *setup.Result, errw io.Writer) {
 	for _, c := range res.Conflicts {
-		fmt.Fprintf(errw, "CONFLICT: %s was modified locally; wrote %s.harness-new instead (reconcile manually)\n", c, c)
+		fmt.Fprintf(errw, "CONFLICT: %s was modified locally; wrote %s.veracity-new instead (reconcile manually)\n", c, c)
 	}
 }
 
@@ -53,7 +53,7 @@ func cmdList(args []string, out, errw io.Writer) int {
 	}
 	lock, err := lockfile.Load(resolveRoot())
 	if err != nil {
-		fmt.Fprintf(errw, "harness list: %v\n", err)
+		fmt.Fprintf(errw, "veracity list: %v\n", err)
 		return 1
 	}
 	if *asJSON {
@@ -80,7 +80,7 @@ func cmdList(args []string, out, errw io.Writer) int {
 
 func cmdLockQuery(args []string, out, errw io.Writer) int {
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness lock-query <name> [--json]")
+		fmt.Fprintln(errw, "usage: veracity lock-query <name> [--json]")
 		return 2
 	}
 	name := args[0]
@@ -92,12 +92,12 @@ func cmdLockQuery(args []string, out, errw io.Writer) int {
 	}
 	lock, err := lockfile.Load(resolveRoot())
 	if err != nil {
-		fmt.Fprintf(errw, "harness lock-query: %v\n", err)
+		fmt.Fprintf(errw, "veracity lock-query: %v\n", err)
 		return 1
 	}
 	p, ok := lock.Find(name)
 	if !ok {
-		fmt.Fprintf(errw, "harness lock-query: no such project %q\n", fs.Arg(0))
+		fmt.Fprintf(errw, "veracity lock-query: no such project %q\n", fs.Arg(0))
 		return 1
 	}
 	type out2 struct {
@@ -121,12 +121,12 @@ func cmdToolchain(args []string, out, errw io.Writer) int {
 		return 2
 	}
 	if *lang == "" {
-		fmt.Fprintln(errw, "usage: harness toolchain --language <go|python|typescript> [--json]")
+		fmt.Fprintln(errw, "usage: veracity toolchain --language <go|python|typescript> [--json]")
 		return 2
 	}
 	data, err := toolchain.JSON(*lang)
 	if err != nil {
-		fmt.Fprintf(errw, "harness toolchain: %v\n", err)
+		fmt.Fprintf(errw, "veracity toolchain: %v\n", err)
 		return 1
 	}
 	_, _ = out.Write(data)
@@ -135,7 +135,7 @@ func cmdToolchain(args []string, out, errw io.Writer) int {
 
 func cmdDocs(args []string, stdin io.Reader, out, errw io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errw, "usage: harness docs <markdown|render|status|enrich> [flags]")
+		fmt.Fprintln(errw, "usage: veracity docs <markdown|render|status|enrich> [flags]")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
@@ -149,7 +149,7 @@ func cmdDocs(args []string, stdin io.Reader, out, errw io.Writer) int {
 	case "enrich":
 		return docsEnrich(rest, stdin, out, errw)
 	default:
-		fmt.Fprintf(errw, "harness docs: unknown subcommand %q (want markdown|render|status|enrich)\n", sub)
+		fmt.Fprintf(errw, "veracity docs: unknown subcommand %q (want markdown|render|status|enrich)\n", sub)
 		return 2
 	}
 }
@@ -167,7 +167,7 @@ func docsRegen(args []string, out, errw io.Writer, render bool) int {
 	root := resolveRoot()
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs: %v\n", err)
 		return 1
 	}
 	fn := docgen.Markdown
@@ -175,7 +175,7 @@ func docsRegen(args []string, out, errw io.Writer, render bool) int {
 		fn = docgen.Render
 	}
 	if _, err := fn(root, lock, *changed, *force, out); err != nil {
-		fmt.Fprintf(errw, "harness docs: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs: %v\n", err)
 		return 1
 	}
 	return 0
@@ -192,23 +192,23 @@ func docsStatus(args []string, out, errw io.Writer) int {
 	root := resolveRoot()
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs status: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs status: %v\n", err)
 		return 1
 	}
 	proj, ok := resolveDocProject(lock, fs.Args())
 	if !ok {
-		fmt.Fprintln(errw, "harness docs status: specify a project name (monorepo) or none (single)")
+		fmt.Fprintln(errw, "veracity docs status: specify a project name (monorepo) or none (single)")
 		return 2
 	}
 	rep, err := docgen.Status(root, lock, proj)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs status: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs status: %v\n", err)
 		return 1
 	}
 	if *tmpl {
 		data, err := rep.EnrichTemplate()
 		if err != nil {
-			fmt.Fprintf(errw, "harness docs status: %v\n", err)
+			fmt.Fprintf(errw, "veracity docs status: %v\n", err)
 			return 1
 		}
 		_, _ = out.Write(append(data, '\n'))
@@ -217,7 +217,7 @@ func docsStatus(args []string, out, errw io.Writer) int {
 	if *asJSON {
 		data, err := rep.JSON()
 		if err != nil {
-			fmt.Fprintf(errw, "harness docs status: %v\n", err)
+			fmt.Fprintf(errw, "veracity docs status: %v\n", err)
 			return 1
 		}
 		_, _ = out.Write(data)
@@ -244,22 +244,22 @@ func docsEnrich(args []string, stdin io.Reader, out, errw io.Writer) int {
 	root := resolveRoot()
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs enrich: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs enrich: %v\n", err)
 		return 1
 	}
 	proj, ok := resolveDocProject(lock, fs.Args())
 	if !ok {
-		fmt.Fprintln(errw, "harness docs enrich: specify a project name (monorepo) or none (single)")
+		fmt.Fprintln(errw, "veracity docs enrich: specify a project name (monorepo) or none (single)")
 		return 2
 	}
 	data, err := readConfig(*from, stdin)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs enrich: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs enrich: %v\n", err)
 		return 1
 	}
 	res, err := docgen.Enrich(root, lock, proj, data)
 	if err != nil {
-		fmt.Fprintf(errw, "harness docs enrich: %v\n", err)
+		fmt.Fprintf(errw, "veracity docs enrich: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(out, "enriched %d module summary(ies), %d interface description(s)\n", res.Modules, res.Interfaces)
@@ -281,25 +281,25 @@ func resolveDocProject(lock *lockfile.Lock, args []string) (lockfile.Project, bo
 func cmdInstallSkills(out, errw io.Writer) int {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(errw, "harness install-skills: %v\n", err)
+		fmt.Fprintf(errw, "veracity install-skills: %v\n", err)
 		return 1
 	}
 	installs := []struct{ asset, dest string }{
-		{"global-frontend/claude/harness-setup/SKILL.md", filepath.Join(home, ".claude", "skills", "harness-setup", "SKILL.md")},
-		{"global-frontend/codex/harness-setup.md", filepath.Join(home, ".codex", "prompts", "harness-setup.md")},
+		{"global-frontend/claude/veracity-setup/SKILL.md", filepath.Join(home, ".claude", "skills", "veracity-setup", "SKILL.md")},
+		{"global-frontend/codex/veracity-setup.md", filepath.Join(home, ".codex", "prompts", "veracity-setup.md")},
 	}
 	for _, in := range installs {
 		data, err := assets.Read(in.asset)
 		if err != nil {
-			fmt.Fprintf(errw, "harness install-skills: %v\n", err)
+			fmt.Fprintf(errw, "veracity install-skills: %v\n", err)
 			return 1
 		}
 		if err := os.MkdirAll(filepath.Dir(in.dest), 0o755); err != nil {
-			fmt.Fprintf(errw, "harness install-skills: %v\n", err)
+			fmt.Fprintf(errw, "veracity install-skills: %v\n", err)
 			return 1
 		}
 		if err := os.WriteFile(in.dest, data, 0o644); err != nil {
-			fmt.Fprintf(errw, "harness install-skills: %v\n", err)
+			fmt.Fprintf(errw, "veracity install-skills: %v\n", err)
 			return 1
 		}
 		fmt.Fprintf(out, "installed %s\n", in.dest)

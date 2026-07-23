@@ -1,4 +1,4 @@
-// Package lockfile defines and (de)serializes harness.lock.json, the committed
+// Package lockfile defines and (de)serializes veracity.lock.json, the committed
 // registry that records a managed repo's layout, opt-in capabilities, and per
 // project features. It is the single source of truth every other package reads;
 // it stores no derived data (paths, tool commands) and no timestamps, so equal
@@ -17,14 +17,14 @@ import (
 )
 
 // FileName is the committed lock file at the managed repo root.
-const FileName = "harness.lock.json"
+const FileName = "veracity.lock.json"
 
 // SchemaVersion is the current lock schema. New optional fields are additive
 // (omitempty; absent keys decode to zero on a newer binary), so they do not bump
-// the version. Forward compatibility is provided by the `.harness-version` binary
-// pin — a managed repo always runs its pinned harness — so an older binary reading
+// the version. Forward compatibility is provided by the `.veracity-version` binary
+// pin — a managed repo always runs its pinned veracity — so an older binary reading
 // a newer lock (which DisallowUnknownFields rejects) is out of the compatibility
-// contract; the fix is to update harness. `harness migrate` bumps a project
+// contract; the fix is to update veracity. `veracity migrate` bumps a project
 // forward when a breaking schema change does require a version bump.
 const SchemaVersion = 1
 
@@ -48,8 +48,8 @@ const (
 )
 
 // ErrNotFound is returned by Load when no lock file exists, signaling an
-// uninitialized directory (where `harness setup` is allowed to run).
-var ErrNotFound = errors.New("harness.lock.json not found")
+// uninitialized directory (where `veracity setup` is allowed to run).
+var ErrNotFound = errors.New("veracity.lock.json not found")
 
 // Lock is the top-level committed document.
 type Lock struct {

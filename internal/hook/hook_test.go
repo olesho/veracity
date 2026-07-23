@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func managedGoRepo(t *testing.T) string {
@@ -31,7 +31,7 @@ func managedGoRepo(t *testing.T) string {
 		}},
 	}
 	b, _ := lockfile.Marshal(lock)
-	mustWrite(t, root, "harness.lock.json", string(b))
+	mustWrite(t, root, "veracity.lock.json", string(b))
 	mustWrite(t, root, "go.mod", "module example.com/app\n\ngo 1.24\n")
 	return root
 }
@@ -115,7 +115,7 @@ func TestSessionStartRecordsBaseline(t *testing.T) {
 	if code := Run(EventSessionStart, "claude", root, strings.NewReader(stdin), &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
 		t.Fatalf("session-start should exit 0, got %d", code)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".harness", "session-abc123")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, ".veracity", "session-abc123")); err != nil {
 		t.Fatalf("expected baseline file: %v", err)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func TestEveryLanguageHasEveryPhase(t *testing.T) {
@@ -19,7 +19,7 @@ func TestEveryLanguageHasEveryPhase(t *testing.T) {
 }
 
 func TestGoFileLintFailsOnStdout(t *testing.T) {
-	// gofmt -l always exits 0 and lists offenders on stdout, so the harness must
+	// gofmt -l always exits 0 and lists offenders on stdout, so the veracity must
 	// treat nonempty stdout as failure.
 	cmds := Commands(lockfile.LangGo, PhaseFileLint)
 	if len(cmds) != 1 || !cmds[0].FailOnStdout {

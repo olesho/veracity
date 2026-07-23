@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // semgrepImage is the official Semgrep CLI container. Running it via Docker keeps
@@ -29,7 +29,7 @@ func Semgrep(root string, lock *lockfile.Lock, proj lockfile.Project, out io.Wri
 	// Semgrep is heavy on CI (pulls a container, downloads the auto ruleset, and
 	// scans the whole tree with no caching). Skip it on CI runners so the gate
 	// stays fast; it still runs locally through the git hooks and manual
-	// `harness ci`. CI systems set CI=true by convention.
+	// `veracity ci`. CI systems set CI=true by convention.
 	if isCI() {
 		fmt.Fprintf(out, "NOTICE [%s] semgrep skipped on CI (runs locally)\n", proj.Name)
 		return nil
@@ -75,7 +75,7 @@ func isCI() bool {
 }
 
 // SemgrepStatus is a non-fatal snapshot of Semgrep availability, used by
-// `harness doctor` to tell the user whether an enabled semgrep verifier will run.
+// `veracity doctor` to tell the user whether an enabled semgrep verifier will run.
 type SemgrepStatus struct {
 	DockerOK bool
 	Image    string

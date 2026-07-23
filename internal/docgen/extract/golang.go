@@ -18,8 +18,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/olesho/harness/internal/docgen/ir"
-	"github.com/olesho/harness/internal/fileset"
+	"github.com/olesho/veracity/internal/docgen/ir"
+	"github.com/olesho/veracity/internal/fileset"
 )
 
 // Go extracts the IR for a Go project. projectDir is the absolute project

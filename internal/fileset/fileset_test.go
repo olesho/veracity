@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 func singleLock() *lockfile.Lock {
@@ -27,7 +27,7 @@ func monorepoLock() *lockfile.Lock {
 }
 
 func TestIgnored(t *testing.T) {
-	ignored := []string{"vendor/x.go", "a/node_modules/b.ts", ".venv/lib/x.py", "projects/api/.git/x", "a/testdata/y.go", ".harness/manifest.json"}
+	ignored := []string{"vendor/x.go", "a/node_modules/b.ts", ".venv/lib/x.py", "projects/api/.git/x", "a/testdata/y.go", ".veracity/manifest.json"}
 	kept := []string{"a.go", "src/x.ts", "eslint.config.js", "projects/api/pkg/x.go"}
 	for _, p := range ignored {
 		if !Ignored(p) {

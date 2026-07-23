@@ -1,5 +1,5 @@
 // Package txn provides a crash-safe, all-or-nothing transaction for the file
-// mutations harness setup/add/edit/remove/upgrade perform. It uses a
+// mutations veracity setup/add/edit/remove/upgrade perform. It uses a
 // write-ahead journal plus pre-image backups so a crash at any point — including
 // mid-overwrite — is fully recoverable: operations before the designated commit
 // point (the lock-file write) roll back to the pre-transaction state, and the
@@ -27,8 +27,8 @@ var ErrConflict = errors.New("target changed on disk during transaction")
 var errFault = errors.New("injected fault")
 
 const (
-	txnRel      = ".harness/txn/current"
-	lockRel     = ".harness/lock"
+	txnRel      = ".veracity/txn/current"
+	lockRel     = ".veracity/lock"
 	journalName = "journal.json"
 	progressN   = "progress"
 )
@@ -75,7 +75,7 @@ type Txn struct {
 // Begin repairs any prior incomplete transaction, then starts a new one holding
 // the exclusive mutation lock. Callers must Close the returned Txn.
 func Begin(root string) (*Txn, error) {
-	if err := os.MkdirAll(filepath.Join(root, ".harness"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".veracity"), 0o755); err != nil {
 		return nil, err
 	}
 	if err := Repair(root); err != nil {
@@ -361,7 +361,7 @@ func atomicWrite(path string, content []byte, mode os.FileMode) error {
 		mode = 0o644
 	}
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".harness-tmp-*")
+	tmp, err := os.CreateTemp(dir, ".veracity-tmp-*")
 	if err != nil {
 		return err
 	}

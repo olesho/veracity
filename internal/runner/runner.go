@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/olesho/harness/internal/analyzers"
-	"github.com/olesho/harness/internal/fileset"
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/toolchain"
+	"github.com/olesho/veracity/internal/analyzers"
+	"github.com/olesho/veracity/internal/fileset"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/toolchain"
 )
 
 // RunPhase runs every command of a phase for one project, writing per-command
@@ -58,7 +58,7 @@ func RunPhase(root string, lock *lockfile.Lock, proj lockfile.Project, phase too
 		}
 		display := strings.Join(argv, " ") // tool name (+ files), before path resolution
 
-		// Harness-managed analyzers resolve to a verified absolute cache path; an
+		// Veracity-managed analyzers resolve to a verified absolute cache path; an
 		// enabled-but-unavailable tool hard-fails here with an install hint.
 		if bin, rerr := resolveArgv0(proj.Language, argv[0]); rerr != nil {
 			fmt.Fprintf(out, "FAIL [%s] %s\n%v\n", proj.Name, display, rerr)
@@ -94,7 +94,7 @@ func RunPhase(root string, lock *lockfile.Lock, proj lockfile.Project, phase too
 }
 
 // resolveArgv0 rewrites a command's leading token to a verified absolute path
-// when it names a harness-managed analyzer; other tools (go, gofmt, …) pass
+// when it names a veracity-managed analyzer; other tools (go, gofmt, …) pass
 // through to PATH resolution as before.
 func resolveArgv0(lang, name string) (string, error) {
 	for _, a := range toolchain.Analyzers(lang) {
@@ -126,7 +126,7 @@ func LintFiles(root string, lock *lockfile.Lock, proj lockfile.Project, files []
 // FileChecks runs the fast, per-file checks the agent edit-loop enforces on the
 // given changed files: the file lint (gofmt) plus any enabled fast formatters
 // (gofumpt, gci). The slower verifiers (tests, mod-tidy, coverage) are left to
-// the git pre-push gate and `harness ci`. It returns the first failure after
+// the git pre-push gate and `veracity ci`. It returns the first failure after
 // running them all.
 func FileChecks(root string, lock *lockfile.Lock, proj lockfile.Project, files []string, out io.Writer) error {
 	if len(files) == 0 {
@@ -263,7 +263,7 @@ func coverageGo(root string, lock *lockfile.Lock, proj lockfile.Project, out io.
 	if len(cmds) == 0 {
 		return nil
 	}
-	f, err := os.CreateTemp("", "harness-cover-*.out")
+	f, err := os.CreateTemp("", "veracity-cover-*.out")
 	if err != nil {
 		return err
 	}

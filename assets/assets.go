@@ -1,8 +1,8 @@
-// Package assets embeds every file the harness binary stamps into managed
+// Package assets embeds every file the veracity binary stamps into managed
 // projects — language templates, project wiring, and the global setup frontend —
 // plus the extractors it runs. Nothing here is ever committed into a managed
 // project as source; templates render content and wiring renders declarative
-// config that calls the installed `harness` binary.
+// config that calls the installed `veracity` binary.
 package assets
 
 import (

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/ownership"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/ownership"
 )
 
 // Level classifies a verify finding.
@@ -87,7 +87,7 @@ func Verify(root string) (*VerifyResult, error) {
 	res := &VerifyResult{}
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		res.add(LevelFail, "harness.lock.json: %v", err)
+		res.add(LevelFail, "veracity.lock.json: %v", err)
 		return res, nil
 	}
 	manifest, err := ownership.Load(root)
@@ -155,7 +155,7 @@ func verifyNoOrphanProjects(root string, lock *lockfile.Lock, res *VerifyResult)
 			continue
 		}
 		if _, ok := lock.Find(e.Name()); !ok {
-			res.add(LevelFail, "unregistered project directory projects/%s (run `harness add`)", e.Name())
+			res.add(LevelFail, "unregistered project directory projects/%s (run `veracity add`)", e.Name())
 		}
 	}
 }

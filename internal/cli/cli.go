@@ -1,4 +1,4 @@
-// Package cli implements harness subcommand dispatch. main is a thin wrapper
+// Package cli implements veracity subcommand dispatch. main is a thin wrapper
 // around Run so the CLI surface is testable without spawning a process.
 package cli
 
@@ -9,17 +9,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/olesho/harness/internal/analyzers"
-	"github.com/olesho/harness/internal/gitq"
-	"github.com/olesho/harness/internal/hook"
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/runner"
-	"github.com/olesho/harness/internal/setup"
-	"github.com/olesho/harness/internal/setup/txn"
-	"github.com/olesho/harness/internal/version"
+	"github.com/olesho/veracity/internal/analyzers"
+	"github.com/olesho/veracity/internal/gitq"
+	"github.com/olesho/veracity/internal/hook"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/runner"
+	"github.com/olesho/veracity/internal/setup"
+	"github.com/olesho/veracity/internal/setup/txn"
+	"github.com/olesho/veracity/internal/version"
 )
 
-// Run dispatches a harness invocation and returns a process exit code.
+// Run dispatches a veracity invocation and returns a process exit code.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		usage(stderr)
@@ -74,17 +74,17 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "docs":
 		return cmdDocs(rest, stdin, stdout, stderr)
 	case "upgrade", "migrate":
-		fmt.Fprintf(stderr, "harness %s: not yet implemented in this build\n", cmd)
+		fmt.Fprintf(stderr, "veracity %s: not yet implemented in this build\n", cmd)
 		return 1
 	default:
-		fmt.Fprintf(stderr, "harness: unknown command %q\n", cmd)
+		fmt.Fprintf(stderr, "veracity: unknown command %q\n", cmd)
 		usage(stderr)
 		return 2
 	}
 }
 
 // resolveRoot returns the managed project root for the current directory. It
-// prefers the nearest ancestor containing harness.lock.json (so a managed
+// prefers the nearest ancestor containing veracity.lock.json (so a managed
 // project nested inside another git repo resolves to itself, not the outer
 // repo), then the git top-level, then the current directory.
 func resolveRoot() string {
@@ -117,7 +117,7 @@ func findLockRoot(dir string) string {
 }
 
 func cmdDoctor(out io.Writer) int {
-	fmt.Fprintf(out, "harness %s\n\n", version.Version)
+	fmt.Fprintf(out, "veracity %s\n\n", version.Version)
 	fmt.Fprintln(out, "toolchain:")
 	type tool struct{ name, hint string }
 	tools := []tool{
@@ -135,22 +135,22 @@ func cmdDoctor(out io.Writer) int {
 			fmt.Fprintf(out, "  MISS  %-14s install: %s\n", t.name, t.hint)
 		}
 	}
-	// Harness-managed analyzers (golangci-lint/gofumpt/gci) live in a per-version
+	// Veracity-managed analyzers (golangci-lint/gofumpt/gci) live in a per-version
 	// cache, not on PATH — report their cache status, not a LookPath probe.
 	if lock, err := lockfile.Load(resolveRoot()); err == nil {
 		st := analyzers.Statuses(lock)
 		if len(st) > 0 {
-			fmt.Fprintln(out, "\nanalyzers (harness-managed cache):")
+			fmt.Fprintln(out, "\nanalyzers (veracity-managed cache):")
 			for _, s := range st {
 				switch s.State {
 				case analyzers.StateCached:
 					fmt.Fprintf(out, "  ok    %-14s %s\n", s.Analyzer.Name, s.Path)
 				case analyzers.StatePathDev:
-					fmt.Fprintf(out, "  dev   %-14s %s (PATH; HARNESS_ANALYZERS_DEV)\n", s.Analyzer.Name, s.Path)
+					fmt.Fprintf(out, "  dev   %-14s %s (PATH; VERACITY_ANALYZERS_DEV)\n", s.Analyzer.Name, s.Path)
 				case analyzers.StateCorrupt:
-					fmt.Fprintf(out, "  BAD   %-14s cache corrupt; run `harness install-tools`\n", s.Analyzer.Name)
+					fmt.Fprintf(out, "  BAD   %-14s cache corrupt; run `veracity install-tools`\n", s.Analyzer.Name)
 				default:
-					fmt.Fprintf(out, "  MISS  %-14s run `harness install-tools`\n", s.Analyzer.Name)
+					fmt.Fprintf(out, "  MISS  %-14s run `veracity install-tools`\n", s.Analyzer.Name)
 				}
 			}
 		}
@@ -220,12 +220,12 @@ func cmdSetup(args []string, stdin io.Reader, out, errw io.Writer) int {
 	if *config != "" {
 		data, err := readConfig(*config, stdin)
 		if err != nil {
-			fmt.Fprintf(errw, "harness setup: %v\n", err)
+			fmt.Fprintf(errw, "veracity setup: %v\n", err)
 			return 1
 		}
 		parsed, err := setup.ParseInput(data)
 		if err != nil {
-			fmt.Fprintf(errw, "harness setup: %v\n", err)
+			fmt.Fprintf(errw, "veracity setup: %v\n", err)
 			return 1
 		}
 		in = parsed
@@ -233,17 +233,17 @@ func cmdSetup(args []string, stdin io.Reader, out, errw io.Writer) int {
 			in.Preset = *preset
 		}
 	} else {
-		fmt.Fprintln(errw, "harness setup: --config is required (use - for stdin, or --print-config-template)")
+		fmt.Fprintln(errw, "veracity setup: --config is required (use - for stdin, or --print-config-template)")
 		return 2
 	}
 
 	root, _ := os.Getwd()
 	res, err := setup.Init(root, in, setup.Options{NoGit: *noGit, Adopt: *adopt})
 	if err != nil {
-		fmt.Fprintf(errw, "harness setup: %v\n", err)
+		fmt.Fprintf(errw, "veracity setup: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(out, "setup complete: %d files created. Next: run `harness bootstrap`.\n", res.Created)
+	fmt.Fprintf(out, "setup complete: %d files created. Next: run `veracity bootstrap`.\n", res.Created)
 	reportConflicts(res, errw)
 	return 0
 }
@@ -251,7 +251,7 @@ func cmdSetup(args []string, stdin io.Reader, out, errw io.Writer) int {
 func cmdBootstrap(out, errw io.Writer) int {
 	root := resolveRoot()
 	if err := setup.Bootstrap(root, out); err != nil {
-		fmt.Fprintf(errw, "harness bootstrap: %v\n", err)
+		fmt.Fprintf(errw, "veracity bootstrap: %v\n", err)
 		return 1
 	}
 	return 0
@@ -266,17 +266,17 @@ func cmdAdd(args []string, stdin io.Reader, out, errw io.Writer) int {
 	}
 	data, err := readConfig(*config, stdin)
 	if err != nil {
-		fmt.Fprintf(errw, "harness add: %v\n", err)
+		fmt.Fprintf(errw, "veracity add: %v\n", err)
 		return 1
 	}
 	in, err := setup.ParseInput(data)
 	if err != nil {
-		fmt.Fprintf(errw, "harness add: %v\n", err)
+		fmt.Fprintf(errw, "veracity add: %v\n", err)
 		return 1
 	}
 	res, err := setup.Add(resolveRoot(), in)
 	if err != nil {
-		fmt.Fprintf(errw, "harness add: %v\n", err)
+		fmt.Fprintf(errw, "veracity add: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(out, "added: %d files created.\n", res.Created)
@@ -288,7 +288,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	// The project name is the first argument so that flags may follow it (Go's
 	// flag package stops at the first positional, so we peel the name off first).
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N] [--audit on|off] [--semgrep on|off] [--sonar on|off]")
+		fmt.Fprintln(errw, "usage: veracity edit <name> --confirm <name> [--lint on|off] [--test on|off] [--markdown on|off] [--diagrams on|off] [--gofumpt on|off] [--gci on|off] [--mod-tidy on|off] [--coverage on|off] [--coverage-min N] [--audit on|off] [--semgrep on|off] [--sonar on|off]")
 		return 2
 	}
 	name := args[0]
@@ -328,7 +328,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 	}
 	res, err := setup.Edit(resolveRoot(), name, *confirm, edit)
 	if err != nil {
-		fmt.Fprintf(errw, "harness edit: %v\n", err)
+		fmt.Fprintf(errw, "veracity edit: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(out, "edited %s: %d created, %d replaced.\n", name, res.Created, res.Replaced)
@@ -338,7 +338,7 @@ func cmdEdit(args []string, out, errw io.Writer) int {
 
 func cmdRemove(args []string, out, errw io.Writer) int {
 	if len(args) < 1 || isFlag(args[0]) {
-		fmt.Fprintln(errw, "usage: harness remove <name> --confirm <name> [--archive]")
+		fmt.Fprintln(errw, "usage: veracity remove <name> --confirm <name> [--archive]")
 		return 2
 	}
 	name := args[0]
@@ -350,7 +350,7 @@ func cmdRemove(args []string, out, errw io.Writer) int {
 		return 2
 	}
 	if err := setup.Remove(resolveRoot(), name, *confirm, *archive); err != nil {
-		fmt.Fprintf(errw, "harness remove: %v\n", err)
+		fmt.Fprintf(errw, "veracity remove: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(out, "removed %s from the lock.\n", name)
@@ -360,7 +360,7 @@ func cmdRemove(args []string, out, errw io.Writer) int {
 func cmdVerify(out, errw io.Writer) int {
 	res, err := setup.Verify(resolveRoot())
 	if err != nil {
-		fmt.Fprintf(errw, "harness verify: %v\n", err)
+		fmt.Fprintf(errw, "veracity verify: %v\n", err)
 		return 1
 	}
 	for _, i := range res.Issues {
@@ -377,14 +377,14 @@ func cmdRun(args []string, out, errw io.Writer, kind string) int {
 	root := resolveRoot()
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness %s: %v\n", kind, err)
+		fmt.Fprintf(errw, "veracity %s: %v\n", kind, err)
 		return 1
 	}
 	targets := lock.Projects
 	if len(args) > 0 {
 		p, ok := lock.Find(args[0])
 		if !ok {
-			fmt.Fprintf(errw, "harness %s: no such project %q\n", kind, args[0])
+			fmt.Fprintf(errw, "veracity %s: no such project %q\n", kind, args[0])
 			return 1
 		}
 		targets = []lockfile.Project{p}
@@ -413,7 +413,7 @@ func cmdRun(args []string, out, errw io.Writer, kind string) int {
 
 func cmdHook(args []string, stdin io.Reader, out, errw io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errw, "usage: harness hook <event> [--agent claude|codex]")
+		fmt.Fprintln(errw, "usage: veracity hook <event> [--agent claude|codex]")
 		return 2
 	}
 	event := args[0]
@@ -444,7 +444,7 @@ func cmdReconfigure(args []string, out, errw io.Writer) int {
 	root := resolveRoot()
 	lock, err := lockfile.Load(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness reconfigure: %v\n", err)
+		fmt.Fprintf(errw, "veracity reconfigure: %v\n", err)
 		return 1
 	}
 
@@ -475,10 +475,10 @@ func cmdReconfigure(args []string, out, errw io.Writer) int {
 	}
 	res, err := setup.Reconfigure(root, changes)
 	if err != nil {
-		fmt.Fprintf(errw, "harness reconfigure: %v\n", err)
+		fmt.Fprintf(errw, "veracity reconfigure: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(out, "reconfigured: %d added, %d updated, %d pruned. Run `harness bootstrap` if you changed git hooks.\n", res.Created, res.Replaced, res.Pruned)
+	fmt.Fprintf(out, "reconfigured: %d added, %d updated, %d pruned. Run `veracity bootstrap` if you changed git hooks.\n", res.Created, res.Replaced, res.Pruned)
 	reportConflicts(res, errw)
 	return 0
 }
@@ -488,7 +488,7 @@ func isFlag(s string) bool { return len(s) > 0 && s[0] == '-' }
 
 func cmdRepair(out, errw io.Writer) int {
 	if err := txn.Repair(resolveRoot()); err != nil {
-		fmt.Fprintf(errw, "harness repair: %v\n", err)
+		fmt.Fprintf(errw, "veracity repair: %v\n", err)
 		return 1
 	}
 	fmt.Fprintln(out, "repair: ok")
@@ -507,7 +507,7 @@ func cmdCI(out, errw io.Writer) int {
 	// Verify.
 	vr, err := setup.Verify(root)
 	if err != nil {
-		fmt.Fprintf(errw, "harness ci: %v\n", err)
+		fmt.Fprintf(errw, "veracity ci: %v\n", err)
 		return 1
 	}
 	for _, i := range vr.Issues {
@@ -538,16 +538,16 @@ func cmdCI(out, errw io.Writer) int {
 }
 
 // cmdInstallTools installs the pinned analyzers required by the lock's enabled
-// features into the harness-managed cache. It is the single acquisition path for
+// features into the veracity-managed cache. It is the single acquisition path for
 // CI (`ci.yml`), bootstrap, and local provisioning.
 func cmdInstallTools(out, errw io.Writer) int {
 	lock, err := lockfile.Load(resolveRoot())
 	if err != nil {
-		fmt.Fprintf(errw, "harness install-tools: %v\n", err)
+		fmt.Fprintf(errw, "veracity install-tools: %v\n", err)
 		return 1
 	}
 	if err := analyzers.Install(lock, out); err != nil {
-		fmt.Fprintf(errw, "harness install-tools: %v\n", err)
+		fmt.Fprintf(errw, "veracity install-tools: %v\n", err)
 		return 1
 	}
 	fmt.Fprintln(out, "install-tools: ok")
@@ -555,9 +555,9 @@ func cmdInstallTools(out, errw io.Writer) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `harness — manage Go/Python/TypeScript projects built with AI coding agents
+	fmt.Fprint(w, `veracity — manage Go/Python/TypeScript projects built with AI coding agents
 
-usage: harness <command> [flags]
+usage: veracity <command> [flags]
 
 setup & lifecycle:
   setup        scaffold a new managed project (--config -, --preset, --print-config-template)
@@ -566,7 +566,7 @@ setup & lifecycle:
   edit         toggle a project's features (edit <name> --confirm <name> --lint on|off --gofumpt on|off --coverage-min 80 ...)
   reconfigure  toggle repo capabilities (reconfigure --ci on --skills off --codex on ...)
   remove       unregister a project (remove <name> --confirm <name> [--archive])
-  verify       check the working tree matches harness.lock.json
+  verify       check the working tree matches veracity.lock.json
   repair       heal an interrupted transaction
 
 enforcement:
@@ -581,7 +581,7 @@ introspection:
   doctor                        diagnose the toolchain (read-only)
   install-skills                install the global setup skill/prompt
   install-tools                 install pinned analyzers (golangci-lint/gofumpt/gci) into the cache
-  version                       print the harness version
+  version                       print the veracity version
 `)
 }
 

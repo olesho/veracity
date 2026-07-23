@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/olesho/harness/internal/analyzers"
-	"github.com/olesho/harness/internal/docgen"
-	"github.com/olesho/harness/internal/gitq"
-	"github.com/olesho/harness/internal/lockfile"
+	"github.com/olesho/veracity/internal/analyzers"
+	"github.com/olesho/veracity/internal/docgen"
+	"github.com/olesho/veracity/internal/gitq"
+	"github.com/olesho/veracity/internal/lockfile"
 )
 
 // gitHookDelegate is the content of a native .git/hooks/<stage> delegate. It is
-// a one-line shim to the harness binary; harness owns all logic (file discovery,
+// a one-line shim to the veracity binary; veracity owns all logic (file discovery,
 // parallelism, scoping), so Lefthook is unnecessary.
 func gitHookDelegate(event string) string {
-	return "#!/usr/bin/env sh\n# Managed by harness. Delegates to the harness binary.\nexec harness hook " + event + "\n"
+	return "#!/usr/bin/env sh\n# Managed by veracity. Delegates to the veracity binary.\nexec veracity hook " + event + "\n"
 }
 
 // Bootstrap installs git-hook delegates (when enabled) and per-project
@@ -38,7 +38,7 @@ func Bootstrap(root string, out io.Writer) error {
 				fmt.Fprintln(out, "git hooks: installed (pre-commit, pre-push)")
 			}
 		} else {
-			fmt.Fprintln(out, "git hooks: skipped (not a git repository; run `git init` then `harness bootstrap`)")
+			fmt.Fprintln(out, "git hooks: skipped (not a git repository; run `git init` then `veracity bootstrap`)")
 		}
 	}
 
@@ -51,9 +51,9 @@ func Bootstrap(root string, out io.Writer) error {
 		}
 	}
 
-	// Report the harness-managed analyzers the enabled features need. Bootstrap
+	// Report the veracity-managed analyzers the enabled features need. Bootstrap
 	// deliberately does not compile them — that keeps it fast and offline; the
-	// explicit `harness install-tools` provisions the pinned cache (CI runs it,
+	// explicit `veracity install-tools` provisions the pinned cache (CI runs it,
 	// and the git-hook/CI gates hard-fail with that same hint if a required tool
 	// is missing, so an unprovisioned repo can never pass silently).
 	if req := analyzers.Required(lock); len(req) > 0 {
@@ -61,7 +61,7 @@ func Bootstrap(root string, out io.Writer) error {
 		for _, a := range req {
 			names = append(names, a.Name)
 		}
-		fmt.Fprintf(out, "analyzers: run `harness install-tools` to provision %s\n", strings.Join(names, ", "))
+		fmt.Fprintf(out, "analyzers: run `veracity install-tools` to provision %s\n", strings.Join(names, ", "))
 	}
 
 	// Render structural docs now (deterministic, no LLM) so they exist right
@@ -70,7 +70,7 @@ func Bootstrap(root string, out io.Writer) error {
 	if n, err := docgen.Render(root, lock, false, false, out); err != nil {
 		fmt.Fprintf(out, "docs: FAILED: %v\n", err)
 	} else if n > 0 {
-		fmt.Fprintln(out, "docs: rendered (run the harness-docs skill to add prose summaries)")
+		fmt.Fprintln(out, "docs: rendered (run the veracity-docs skill to add prose summaries)")
 	}
 	return nil
 }

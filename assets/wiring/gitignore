@@ -1,7 +1,7 @@
-# harness runtime state
-.harness/txn/
-.harness/session-*
-.harness/lock
+# veracity runtime state
+.veracity/txn/
+.veracity/session-*
+.veracity/lock
 **/docs/.docgen-cache/
 
 # dependencies / build output

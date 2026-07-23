@@ -1,17 +1,17 @@
-# harness
+# veracity
 
 A published, globally-installed CLI for developing Go/Python/TypeScript software with AI coding agents
-(Claude Code and OpenAI Codex CLI). `harness` scaffolds and manages **clean projects** — the projects it
+(Claude Code and OpenAI Codex CLI). `veracity` scaffolds and manages **clean projects** — the projects it
 manages never vendor the tool itself; they carry only declarative wiring, thin shims, and generated docs
-that delegate to the installed `harness` binary.
+that delegate to the installed `veracity` binary.
 
-> This repository **is the harness source** (a Go module producing `cmd/harness`). It is not itself a
+> This repository **is the veracity source** (a Go module producing `cmd/veracity`). It is not itself a
 > managed project. See `/Users/oleh/.claude/plans/i-want-to-create-optimized-river.md` for the full design.
 
 ## Install
 
 From a checkout of this repo, run the install script — it builds the CLI, puts
-it on your Go bin path, and registers the `harness-setup` skill so you can drive
+it on your Go bin path, and registers the `veracity-setup` skill so you can drive
 setup from Claude Code:
 
 ```sh
@@ -22,48 +22,47 @@ Then make sure your Go bin dir is on `PATH` (the script tells you if it isn't):
 
 ```sh
 export PATH="$(go env GOPATH)/bin:$PATH"   # add to your shell profile
-harness version
+veracity version
 ```
 
-Once the module is published to a host, this becomes a one-liner instead of a
-checkout: `go install <module>/cmd/harness@latest` followed by
-`harness install-skills`. (The module path `github.com/olesho/harness` is a
-placeholder until then.)
+Once a tagged release is published, this becomes a one-liner instead of a
+checkout: `go install github.com/olesho/veracity/cmd/veracity@latest` followed
+by `veracity install-skills`.
 
 ## Set up in a Go project with Claude Code
 
 After installing, open Claude Code **in your project directory** and ask it to
-"set up harness in this project." It runs the `harness-setup` skill: it checks
+"set up veracity in this project." It runs the `veracity-setup` skill: it checks
 prerequisites, asks what you want (layout, features, capabilities), and runs
-`harness setup` + `harness bootstrap` + `harness verify` for you — you never
+`veracity setup` + `veracity bootstrap` + `veracity verify` for you — you never
 hand-write the config.
 
 Prefer to do it yourself without the agent? See
 [Adopt an existing Go project](#adopt-an-existing-go-project) below for the
-direct `harness setup --adopt` command.
+direct `veracity setup --adopt` command.
 
 ## Quick start (in an empty project directory)
 
 ```sh
-harness install-skills                 # install the global setup skill/prompt for Claude/Codex (once)
-harness setup --preset standard --config -   # or drive it via the /harness-setup agent skill
-harness bootstrap                      # install deps + git hooks
-harness verify                         # confirm the project matches its lock
+veracity install-skills                 # install the global setup skill/prompt for Claude/Codex (once)
+veracity setup --preset standard --config -   # or drive it via the /veracity-setup agent skill
+veracity bootstrap                      # install deps + git hooks
+veracity verify                         # confirm the project matches its lock
 ```
 
 ## Adopt an existing Go project
 
 Run this **from the root of your existing project** (where `go.mod` lives). The
-`--adopt` flag tells harness the directory is not empty on purpose: it detects
+`--adopt` flag tells veracity the directory is not empty on purpose: it detects
 your real module path from `go.mod`, does **not** inject any sample code, leaves
-your source and `go.mod` untouched, and only adds harness's own files
-(`harness.lock.json`, `.harness-version`, native lint config if enabled and
+your source and `go.mod` untouched, and only adds veracity's own files
+(`veracity.lock.json`, `.veracity-version`, native lint config if enabled and
 missing, and the wiring for whatever capabilities you turn on).
 
 ```sh
 cd /path/to/your/go/project
 
-harness setup --adopt --config - <<'JSON'
+veracity setup --adopt --config - <<'JSON'
 {
   "layout": "single",
   "capabilities": { "agents": ["claude"], "gitHooks": true, "skills": true },
@@ -75,10 +74,10 @@ harness setup --adopt --config - <<'JSON'
 }
 JSON
 
-harness bootstrap     # install git-hook delegates (and any deps)
-harness verify        # confirm the lock matches your project
-harness lint          # gofmt + go vet + golangci-lint over your code
-harness docs render   # write docs/MODULES.md + modules.{svg,html} from your AST
+veracity bootstrap     # install git-hook delegates (and any deps)
+veracity verify        # confirm the lock matches your project
+veracity lint          # gofmt + go vet + golangci-lint over your code
+veracity docs render   # write docs/MODULES.md + modules.{svg,html} from your AST
 ```
 
 Notes:
@@ -88,40 +87,40 @@ Notes:
   set `"lint": false`. A minimal adopt (`"features": {"lint": true}`,
   `capabilities: {}`) adds almost nothing but the lock, the pin, and a
   `.golangci.yml`.
-- To let the agent write the diagram prose: `harness docs status --json` lists
-  what's pending, then the agent submits it via `harness docs enrich` (the
-  `harness-docs` skill, installed when `skills` is on, drives this). harness
+- To let the agent write the diagram prose: `veracity docs status --json` lists
+  what's pending, then the agent submits it via `veracity docs enrich` (the
+  `veracity-docs` skill, installed when `skills` is on, drives this). veracity
   itself never calls an LLM.
-- Prefer to hand-edit the config? `harness setup --print-config-template` prints
+- Prefer to hand-edit the config? `veracity setup --print-config-template` prints
   a starting point.
 
 ## Reruns and changing your mind
 
-`harness setup` is a one-time step: running it again on an initialized repo is
+`veracity setup` is a one-time step: running it again on an initialized repo is
 **refused** (it points you at the commands below). Everything is adjustable
 afterward without re-running setup:
 
 ```sh
 # per-project features (name first, then flags; --confirm guards the change)
-harness edit myapp --confirm myapp --diagrams on      # enabling diagrams also enables markdown
-harness edit myapp --confirm myapp --lint off --test off
-harness edit myapp --confirm myapp --gofumpt on --gci on --mod-tidy on   # Go quality verifiers
-harness edit myapp --confirm myapp --coverage on --coverage-min 80       # fail below 80% coverage (Go/TS)
-harness edit web --confirm web --audit on --semgrep on                   # TS/SAST verifiers
+veracity edit myapp --confirm myapp --diagrams on      # enabling diagrams also enables markdown
+veracity edit myapp --confirm myapp --lint off --test off
+veracity edit myapp --confirm myapp --gofumpt on --gci on --mod-tidy on   # Go quality verifiers
+veracity edit myapp --confirm myapp --coverage on --coverage-min 80       # fail below 80% coverage (Go/TS)
+veracity edit web --confirm web --audit on --semgrep on                   # TS/SAST verifiers
 
 # repo-level capabilities (no name; add/remove wiring, CI, skills, agents)
-harness reconfigure --ci on --agent-docs on           # creates ci.yml, CLAUDE.md, ...
-harness reconfigure --ci off                          # prunes the files it added
-harness reconfigure --codex on                        # add Codex hook wiring alongside Claude
+veracity reconfigure --ci on --agent-docs on           # creates ci.yml, CLAUDE.md, ...
+veracity reconfigure --ci off                          # prunes the files it added
+veracity reconfigure --codex on                        # add Codex hook wiring alongside Claude
 ```
 
 - **Enabling** a capability creates its managed files; **disabling** one prunes
-  exactly the files harness manages for it. Your source, `go.mod`, native lint
+  exactly the files veracity manages for it. Your source, `go.mod`, native lint
   config, and generated docs are never pruned.
-- If you toggle `git-hooks`, run `harness bootstrap` afterward to (re)install the
+- If you toggle `git-hooks`, run `veracity bootstrap` afterward to (re)install the
   `.git/hooks` delegates.
-- If you hand-edited a harness-managed wiring file, a reconcile won't clobber it:
-  it writes a `<file>.harness-new` beside it and tells you.
+- If you hand-edited a veracity-managed wiring file, a reconcile won't clobber it:
+  it writes a `<file>.veracity-new` beside it and tells you.
 - `language` and `modulePath` are immutable; changing them means removing and
   re-adding the project.
 
@@ -130,10 +129,10 @@ harness reconfigure --codex on                        # add Codex hook wiring al
 Beyond `lint`/`test`, Go projects have four independent, off-by-default quality
 verifiers (all on under the `full` preset). The fast formatters **gofumpt** and
 **gci** also run in the agent edit-loop (post-edit/stop hooks) so an AI agent gets
-blocked-with-feedback and self-corrects each turn — `harness fmt` auto-fixes both.
+blocked-with-feedback and self-corrects each turn — `veracity fmt` auto-fixes both.
 The heavier **modTidy** and **coverage** checks run at the git **pre-push** hook
-and in **`harness ci`**. `gofumpt`/`gci`/`modTidy` are Go-only (`coverage` is shared
-with TypeScript — see below); `harness setup`/`edit` reject a verifier on a language
+and in **`veracity ci`**. `gofumpt`/`gci`/`modTidy` are Go-only (`coverage` is shared
+with TypeScript — see below); `veracity setup`/`edit` reject a verifier on a language
 it doesn't support. Enforcement by tier:
 
 | Tier | Runs |
@@ -141,7 +140,7 @@ it doesn't support. Enforcement by tier:
 | agent post-edit / stop | `gofmt` + (enabled) `gofumpt`, `gci` on changed files |
 | git pre-commit | lint (`golangci-lint`, `go vet`, `gofmt`) |
 | git pre-push | `go test` + (enabled) `gofumpt`, `gci`, `modTidy`, `coverage` |
-| `harness ci` | verify + lint + test + all enabled verifiers |
+| `veracity ci` | verify + lint + test + all enabled verifiers |
 
 | Feature | What it checks | `edit` flag |
 |---|---|---|
@@ -154,13 +153,13 @@ it doesn't support. Enforcement by tier:
 the project entry) or later via `--coverage-min N`; `0` (the default) measures and
 reports coverage but never fails.
 
-These tools are **harness-managed analyzers**: pinned versions installed by
-`harness install-tools` into a per-version cache under your user cache dir,
+These tools are **veracity-managed analyzers**: pinned versions installed by
+`veracity install-tools` into a per-version cache under your user cache dir,
 resolved by verified absolute path (sha256-checked). CI runs `install-tools`; run
-it once locally too (`harness bootstrap` reminds you). `harness doctor` reports
+it once locally too (`veracity bootstrap` reminds you). `veracity doctor` reports
 each analyzer's cache status. If an enabled verifier's tool is missing, the gate
-**fails** with a `run: harness install-tools` hint rather than silently skipping.
-(`HARNESS_ANALYZERS_DEV=1` allows a version-verified PATH binary for local
+**fails** with a `run: veracity install-tools` hint rather than silently skipping.
+(`VERACITY_ANALYZERS_DEV=1` allows a version-verified PATH binary for local
 development.)
 
 ## TypeScript quality & security verifiers (optional)
@@ -174,7 +173,7 @@ TypeScript projects come with the same tiered enforcement as Go. Two things are
   also on in `tsconfig.json`. (Adopted projects with an existing ESLint config are
   left untouched.)
 - **Prettier** — formatting is enforced in the file-lint and project-lint phases.
-- **Native git hooks replace Husky + lint-staged** — harness installs
+- **Native git hooks replace Husky + lint-staged** — veracity installs
   `.git/hooks` delegates directly, so you don't add those dev-dependencies.
 
 Beyond that, three independent, off-by-default verifiers (all on under the `full`
@@ -182,17 +181,17 @@ preset) toggle like the Go ones:
 
 | Feature | What it checks | `edit` flag | Runs at |
 |---|---|---|---|
-| `coverage` | total line coverage ≥ `coverageMin` (via `vitest --coverage`) | `--coverage on\|off`, `--coverage-min N` | pre-push, `harness ci` |
-| `audit` | production dependency vulnerabilities (`pnpm audit --prod --audit-level high`) | `--audit on\|off` | pre-push, `harness ci` |
-| `semgrep` | SAST scan (`semgrep --config auto`, any language) | `--semgrep on\|off` | pre-push, `harness ci` |
+| `coverage` | total line coverage ≥ `coverageMin` (via `vitest --coverage`) | `--coverage on\|off`, `--coverage-min N` | pre-push, `veracity ci` |
+| `audit` | production dependency vulnerabilities (`pnpm audit --prod --audit-level high`) | `--audit on\|off` | pre-push, `veracity ci` |
+| `semgrep` | SAST scan (`semgrep --config auto`, any language) | `--semgrep on\|off` | pre-push, `veracity ci` |
 
 `coverage` is now shared by Go and TypeScript (same `coverageMin` field; `0`
 measures-and-reports without failing). `audit` scans **production** dependencies
 only, so a scaffold (dev-deps only) passes clean while real runtime deps are
 gated. `semgrep` is language-agnostic and runs via Docker — like the `sonar` verifier it **soft-skips** (WARN, no failure) when Docker
-is unavailable, so it never blocks a machine that lacks it. `harness doctor` reports
+is unavailable, so it never blocks a machine that lacks it. `veracity doctor` reports
 Docker availability for both. `pnpm audit` and vitest coverage come from the
-project's own `package.json` (harness adds `@vitest/coverage-v8`), not the
+project's own `package.json` (veracity adds `@vitest/coverage-v8`), not the
 `go install`-based analyzer cache.
 
 **Roadmap:**
@@ -200,21 +199,21 @@ project's own `package.json` (harness adds `@vitest/coverage-v8`), not the
   `syft`/`grype` (SBOM) — planned as Go-only toggles; not implemented yet.
 - CI-native checks that need GitHub Actions PR context — **CodeQL** and
   **Danger JS** — will be generated as standalone workflow jobs (they can't run
-  inside `harness ci`); not implemented yet.
+  inside `veracity ci`); not implemented yet.
 
 ## Concepts
 
 - **One published CLI, clean projects.** The binary embeds templates, wiring, extractors, and the toolchain
-  table. Generated projects contain no tool source — only `harness.lock.json`, `.harness-version`, native
+  table. Generated projects contain no tool source — only `veracity.lock.json`, `.veracity-version`, native
   language config, generated docs, and thin declarative wiring.
-- **Lightweight by construction.** A tiny mandatory core (`harness.lock.json` + `.harness-version`); every
+- **Lightweight by construction.** A tiny mandatory core (`veracity.lock.json` + `.veracity-version`); every
   other capability (agents, git hooks, CI, docs, skills) is opt-in and generated only when enabled.
 - **Tiered enforcement.** Agent hooks (fast in-loop feedback) → native git hooks (universal local backstop)
-  → CI (authoritative), all calling the same `harness` logic.
+  → CI (authoritative), all calling the same `veracity` logic.
 
 ## Development
 
 ```sh
-go build ./cmd/harness
+go build ./cmd/veracity
 go test ./...
 ```

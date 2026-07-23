@@ -1,13 +1,13 @@
-// Package analyzers is the single owner of harness-managed external tool
+// Package analyzers is the single owner of veracity-managed external tool
 // acquisition and resolution. It installs each pinned toolchain.Analyzer into a
 // per-version cache with `go install` (source integrity via the Go module
 // checksum database) and records the produced binary's sha256, so every later
 // resolution executes a deterministic absolute path whose integrity is verified.
 //
-// The default contract is cache-only: CI, git hooks, and `harness ci` require the
-// installed cache binary and hard-fail otherwise (with a `run: harness
+// The default contract is cache-only: CI, git hooks, and `veracity ci` require the
+// installed cache binary and hard-fail otherwise (with a `run: veracity
 // install-tools` hint). A version-verified PATH fallback is available only when
-// HARNESS_ANALYZERS_DEV=1, for local development against a personally installed
+// VERACITY_ANALYZERS_DEV=1, for local development against a personally installed
 // tool. Both cli and setup/bootstrap call this package, so there is one acquisition
 // path and no cli→setup import cycle.
 package analyzers
@@ -23,24 +23,24 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/olesho/harness/internal/lockfile"
-	"github.com/olesho/harness/internal/toolchain"
+	"github.com/olesho/veracity/internal/lockfile"
+	"github.com/olesho/veracity/internal/toolchain"
 )
 
 // devMode reports whether the version-verified PATH fallback is permitted.
-func devMode() bool { return os.Getenv("HARNESS_ANALYZERS_DEV") == "1" }
+func devMode() bool { return os.Getenv("VERACITY_ANALYZERS_DEV") == "1" }
 
 // cacheRoot is the directory holding per-version analyzer installs. Overridable
-// via HARNESS_ANALYZERS_DIR (used by tests to isolate the cache).
+// via VERACITY_ANALYZERS_DIR (used by tests to isolate the cache).
 func cacheRoot() (string, error) {
-	if d := os.Getenv("HARNESS_ANALYZERS_DIR"); d != "" {
+	if d := os.Getenv("VERACITY_ANALYZERS_DIR"); d != "" {
 		return d, nil
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "harness", "analyzers"), nil
+	return filepath.Join(base, "veracity", "analyzers"), nil
 }
 
 func analyzerDir(a toolchain.Analyzer) (string, error) {
@@ -185,14 +185,14 @@ func Resolve(lang, name string) (string, error) {
 	case statErr == nil:
 		sum, rerr := os.ReadFile(bin + ".sha256")
 		if rerr != nil {
-			return "", fmt.Errorf("cached analyzer %s@%s missing checksum; run `harness install-tools`", a.Name, a.Version)
+			return "", fmt.Errorf("cached analyzer %s@%s missing checksum; run `veracity install-tools`", a.Name, a.Version)
 		}
 		got, herr := fileSHA256(bin)
 		if herr != nil {
 			return "", herr
 		}
 		if strings.TrimSpace(string(sum)) != got {
-			return "", fmt.Errorf("cached analyzer %s@%s corrupt (checksum mismatch); run `harness install-tools`", a.Name, a.Version)
+			return "", fmt.Errorf("cached analyzer %s@%s corrupt (checksum mismatch); run `veracity install-tools`", a.Name, a.Version)
 		}
 		return bin, nil
 	case !errors.Is(statErr, os.ErrNotExist):
@@ -202,7 +202,7 @@ func Resolve(lang, name string) (string, error) {
 	if devMode() {
 		return resolvePATH(a)
 	}
-	return "", fmt.Errorf("%s not installed; run `harness install-tools`", a.Name)
+	return "", fmt.Errorf("%s not installed; run `veracity install-tools`", a.Name)
 }
 
 // resolvePATH accepts a PATH binary only when its reported version matches the
@@ -210,14 +210,14 @@ func Resolve(lang, name string) (string, error) {
 func resolvePATH(a toolchain.Analyzer) (string, error) {
 	p, err := exec.LookPath(a.Name)
 	if err != nil {
-		return "", fmt.Errorf("%s not installed and not on PATH; run `harness install-tools`", a.Name)
+		return "", fmt.Errorf("%s not installed and not on PATH; run `veracity install-tools`", a.Name)
 	}
 	v, err := reportedVersion(a.Name)
 	if err != nil {
-		return "", fmt.Errorf("%s on PATH but its version could not be verified (want v%s); run `harness install-tools`", a.Name, a.Version)
+		return "", fmt.Errorf("%s on PATH but its version could not be verified (want v%s); run `veracity install-tools`", a.Name, a.Version)
 	}
 	if !strings.Contains(v, a.Version) {
-		return "", fmt.Errorf("%s on PATH is %q but v%s is pinned; run `harness install-tools`", a.Name, strings.TrimSpace(v), a.Version)
+		return "", fmt.Errorf("%s on PATH is %q but v%s is pinned; run `veracity install-tools`", a.Name, strings.TrimSpace(v), a.Version)
 	}
 	return p, nil
 }
