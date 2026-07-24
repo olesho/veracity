@@ -2,3 +2,10 @@ node_modules/
 dist/
 coverage/
 pnpm-lock.yaml
+
+# veracity-managed wiring: rendered by the veracity binary (Go json.MarshalIndent,
+# which formats arrays differently from prettier) and re-rendered on every hook
+# run. prettier must not fight veracity's output, or the pre-commit gate fails on
+# files the agent cannot fix.
+.claude/settings.json
+veracity.lock.json
