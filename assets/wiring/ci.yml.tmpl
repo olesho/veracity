@@ -3,9 +3,12 @@ on:
   push:
   pull_request:
 
+# The runner comes from the repository variable CI_RUNNER, as JSON: unset, it
+# is GitHub's ubuntu-latest; ["self-hosted","LABEL"] picks self-hosted runners
+# (see .veracity/docs/ci-setup.md).
 jobs:
   veracity-ci:
-    runs-on: ubuntu-latest
+    runs-on: ${{"{{"}} fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -13,6 +16,9 @@ jobs:
       # Go is always required to install the pinned veracity binary itself.
       - uses: actions/setup-go@v5
         with:
+          # A self-hosted runner keeps Go's caches on its own disk; saving them
+          # to GitHub's cache only costs time there.
+          cache: ${{"{{"}} vars.CI_RUNNER == '' }}
 {{- if .HasGo}}
           go-version-file: go.mod
 {{- else}}

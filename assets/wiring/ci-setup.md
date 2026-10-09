@@ -15,6 +15,21 @@ repository settings, add a branch protection rule (or ruleset) for your default
 branch and mark the `veracity-ci` check **Required**. Until you do, a red CI run
 does not block merges.
 
+## Run CI on your own runners (optional)
+
+`veracity-ci` runs on GitHub's `ubuntu-latest` unless the repository variable
+`CI_RUNNER` says otherwise. Set it to a JSON list of runner labels to use
+self-hosted runners, which spend no Actions minutes:
+
+```sh
+gh variable set CI_RUNNER --body '["self-hosted","my-label"]'
+```
+
+The runner needs Go's toolchain prerequisites (a C toolchain and linker for
+cgo) and whatever your projects' tests use. With `CI_RUNNER` set, `setup-go`
+does not save its caches to GitHub's cache: the runner keeps them on its own
+disk. `gh variable delete CI_RUNNER` goes back to GitHub's runners.
+
 ## SonarQube is local-only (not run in CI)
 
 The `sonar` verifier targets a **self-hosted** SonarQube reachable only from a
