@@ -5,7 +5,7 @@ on:
 
 # The runner comes from the repository variable CI_RUNNER, as JSON: unset, it
 # is GitHub's ubuntu-latest; ["self-hosted","LABEL"] picks self-hosted runners
-# (see .veracity/docs/ci-setup.md).
+# (see docs/ci-setup.md).
 jobs:
   veracity-ci:
     runs-on: ${{"{{"}} fromJSON(vars.CI_RUNNER || '"ubuntu-latest"') }}
