@@ -1,7 +1,17 @@
 name: ci
+
+# A pull request's commits run once, as the pull request: a push runs CI only
+# on the default branch (main, or master), so a branch is checked when a pull
+# request opens for it. A newer commit cancels the pull request's run it
+# supersedes; a run of the default branch always finishes.
 on:
   push:
+    branches: [main, master]
   pull_request:
+
+concurrency:
+  group: ${{"{{"}} github.workflow }}-${{"{{"}} github.ref }}
+  cancel-in-progress: ${{"{{"}} github.event_name == 'pull_request' }}
 
 # The runner comes from the repository variable CI_RUNNER, as JSON: unset, it
 # is GitHub's ubuntu-latest; ["self-hosted","LABEL"] picks self-hosted runners

@@ -8,6 +8,11 @@ The local git hooks and agent hooks are fast, advisory backstops only — they a
 bypassable (`git commit --no-verify`) and do not run for changes pushed from
 another machine. **Only CI is authoritative.**
 
+CI runs for every pull request and for each push to the default branch (`main`
+or `master`). A push to any other branch runs nothing until a pull request opens
+for it, so each commit is checked once; a newer commit cancels the pull
+request's run it supersedes.
+
 ## Make CI required (external, one-time)
 
 GitHub does not enforce a workflow as required just because it exists. In your
