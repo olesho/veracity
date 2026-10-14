@@ -270,6 +270,14 @@ func TestToggleFeaturesAndCapabilities(t *testing.T) {
 		t.Fatalf("reading ci.yml: %v", err)
 	} else if strings.Contains(string(ci), "pnpm") || strings.Contains(string(ci), "setup-node") {
 		t.Errorf("go-only ci.yml should not include Node/pnpm setup:\n%s", ci)
+	} else {
+		// Regression: a pull request's commit must not run CI twice (once as a
+		// push of its branch, once as the pull request).
+		for _, want := range []string{"branches: [main, master]", "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"} {
+			if !strings.Contains(string(ci), want) {
+				t.Errorf("ci.yml missing %q:\n%s", want, ci)
+			}
+		}
 	}
 	if code, _, e := run(t, "", "reconfigure", "--ci", "off"); code != 0 {
 		t.Fatalf("reconfigure --ci off failed: %s", e)
